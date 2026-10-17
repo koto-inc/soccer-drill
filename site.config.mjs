@@ -20,8 +20,8 @@ export default {
   // Google AdSense のパブリッシャーID（ca-pub-XXXXXXXXXXXXXXXX）。プレースホルダのままなら広告タグは出力されない。
   ADSENSE_CLIENT: 'ca-pub-XXXXXXXXXXXXXXXX',
 
-  // 運営者情報・お問い合わせページに使う。
-  OWNER_NAME: 'KOTO コーチ',
+  // 運営者情報・お問い合わせページ・フッターに使う。（固有名詞なので漢字の制限は受けない）
+  OWNER_NAME: '松本コーチ', // kanji-ok
   // （保護者向けページ用なので、漢字の制限は受けない）
   OWNER_DESCRIPTION: 'インドネシアの日本人会サッカーチームで、小学生を指導しているコーチです。', // kanji-ok
   CONTACT_EMAIL: 'contact@example.com',
@@ -37,6 +37,8 @@ export default {
   TEAM_PASSCODE: 'JJC',
   // true なら全ページに noindex,nofollow を付け、robots.txt でクロールを止める（検索に載らない）
   NOINDEX: true,
+  // true なら「コーチについて」「プライバシーポリシー」「お問い合わせ」のページを作らず、フッターのリンクも出さない（チーム内公開のあいだは隠す）
+  HIDE_INFO_PAGES: true,
 
   // 👍👎 フィードバックの送り先（Google Apps Script のウェブアプリURL）。空なら端末の localStorage に貯めるだけ。
   // 受け口の作り方は README と tools/feedback-gas.gs を参照。

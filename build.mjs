@@ -400,11 +400,11 @@ ${body}
     <nav aria-label="サイトのリンク">
       <a href="${href('/')}">TOP</a>
       <a href="${href('/words/')}">サッカーのことば</a>
-      <a href="${href('/about/')}">コーチについて</a>
+${config.HIDE_INFO_PAGES ? '' : `      <a href="${href('/about/')}">コーチについて</a>
       <a href="${href('/privacy/')}">プライバシーポリシー</a>
-      <a href="${href('/contact/')}">お問い合わせ</a>
+      <a href="${href('/contact/')}">お問い合わせ</a>`}
     </nav>
-    <p>© ${config.PUBLISHED_YEAR} ${esc(config.SITE_NAME)}（作った人：<a href="${href('/about/')}">${esc(config.OWNER_NAME)}</a>）</p>
+    <p>© ${config.PUBLISHED_YEAR} ${esc(config.SITE_NAME)}（作った人：${config.HIDE_INFO_PAGES ? esc(config.OWNER_NAME) : `<a href="${href('/about/')}">${esc(config.OWNER_NAME)}</a>`}）</p>
   </footer>
 </div>
 <script src="${href('/app.js')}" defer></script>
@@ -509,7 +509,7 @@ ${CATS.map((g) => `
 <section class="card" id="about-site">
   <h2 class="cath">このサイトについて</h2>
   <p class="about-site">${esc(config.SITE_DESCRIPTION)} ピッチ図の青は味方、赤は相手、黄色のふちどりが「きみ」。ボールの場所と味方・相手のいる場所を見て、「つぎ、どこへ動く？」を考えよう。せいかいは1つとはかぎらない（1〜3つ）。答え合わせをすると、せいかいの動きがやじるしつきの図で、ちがう答えには理由がつく。中級からは「体の向き」（おうぎの形）、上級からは「ファーストタッチ」（太いやじるしとボール）も考える。わからないことばは <a href="${href('/words/')}">サッカーのことば</a> で調べられる。</p>
-  <p class="about-site">コーチやおうちの人へ：練習前の5分、車の中、しあいの前の日など、短い時間で「考えるくせ」をつけるために作った問題集です。問題についてのご意見は <a href="${href('/contact/')}">お問い合わせ</a> からどうぞ。</p>
+  <p class="about-site">コーチやおうちの人へ：練習前の5分、車の中、しあいの前の日など、短い時間で「考えるくせ」をつけるために作った問題集です。${config.HIDE_INFO_PAGES ? '問題についてのご意見は、コーチにちょくせつ教えてください。' : `問題についてのご意見は <a href="${href('/contact/')}">お問い合わせ</a> からどうぞ。`}</p>
 </section>
 <section class="card" id="list">
   <h2 class="cath">問題リスト（全 ${QUESTIONS.length} 問）</h2>
@@ -638,9 +638,11 @@ async function main() {
   // TOP・カテゴリ
   write('index.html', indexPage()); add('/', '1.0');
   for (const c of ALL_CATS.filter((c) => c.slug)) { write(`c/${c.slug}/index.html`, categoryPage(c)); add(catPath(c), '0.6'); }
-  // 固定ページ
-  for (const f of fs.readdirSync(path.join(SRC, 'pages')).filter((f) => f.endsWith('.html'))) {
-    const p = staticPage(f); write(p.pathname.slice(1) + 'index.html', p.html); add(p.pathname, '0.3');
+  // 固定ページ（HIDE_INFO_PAGES のあいだは作らない。URL を直接たたいても 404）
+  if (!config.HIDE_INFO_PAGES) {
+    for (const f of fs.readdirSync(path.join(SRC, 'pages')).filter((f) => f.endsWith('.html'))) {
+      const p = staticPage(f); write(p.pathname.slice(1) + 'index.html', p.html); add(p.pathname, '0.3');
+    }
   }
   // 10問チャレンジ（進行・結果は端末側 app.js で描く）
   write('challenge/index.html', layout({ title: `${config.CHALLENGE.count}問チャレンジ`, description: `レベルをえらんでランダムに${config.CHALLENGE.count}問。◎=1点、○=0.5点、タイムも計る。何級までいけるかな？`, pathname: '/challenge/',

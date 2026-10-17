@@ -138,10 +138,11 @@ positioning-drill/
 |---|---|
 | `TEAM_PASSCODE` | 合言葉。設定すると初回アクセス時に「合言葉＋なまえ」画面が出て、正しければ端末（localStorage）に記憶して以後は出ない。ブラウザ側だけの簡易ゲートで、本気の認証ではない。大文字小文字・全角半角・空白は区別しない。`''` にすると合言葉は聞かず、なまえだけ聞く |
 | `NOINDEX` | `true` なら全ページに `noindex,nofollow` を付け、robots.txt を `Disallow: /` にする（検索に載らない）。一般公開するときは `false` にする |
+| `HIDE_INFO_PAGES` | `true` なら「コーチについて」「プライバシーポリシー」「お問い合わせ」の 3 ページを作らず、フッターのリンクも出さない（チーム内公開のあいだ用）。一般公開・AdSense 審査のときは `false` にする |
 | `FEEDBACK_ENDPOINT` | 👍👎 とチャレンジ結果の送り先・端末をまたいだベスト記録の取得先（下記）。空なら端末の localStorage だけで動く |
 | `RANKS` | 10問チャレンジのランク（点数の下限・絵文字・名前・一言）。並びは点数の低い順 |
 
-今は `TEAM_PASSCODE: 'koto'`、`NOINDEX: true` になっている。**一般公開するときは両方外すこと。**
+今は `TEAM_PASSCODE: 'JJC'`、`NOINDEX: true`、`HIDE_INFO_PAGES: true` になっている。**一般公開するときは 3 つとも外すこと。**
 
 ### 10問チャレンジ（レベル別）
 

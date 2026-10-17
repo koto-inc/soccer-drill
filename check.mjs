@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { checkAll as checkKanji } from './tools/check-kanji.mjs';
 import { missingTerms } from './tools/list-terms.mjs';
+import config from './site.config.mjs';
 
 const DIST = path.resolve('dist');
 const code = ['q_helpers.js', 'q_base.js', 'q_partA.js', 'q_partB.js', 'q_partC.js']
@@ -30,7 +31,8 @@ QUESTIONS.forEach((q, i) => {
   if (!html.includes('class="words"')) noWords.push(i + 1);   // 用語が1つも出てこない問題（NG ではない）
 });
 if (noWords.length) console.log(`「ことば」ボックスが無い問題（用語なし）: Q${noWords.join(', Q')}`);
-for (const f of ['index.html', 'sitemap.xml', 'robots.txt', '404.html', 'about/index.html', 'privacy/index.html', 'contact/index.html', 'words/index.html', 'style.css', 'app.js']) {
+const infoPages = config.HIDE_INFO_PAGES ? [] : ['about/index.html', 'privacy/index.html', 'contact/index.html'];
+for (const f of ['index.html', 'sitemap.xml', 'robots.txt', '404.html', ...infoPages, 'words/index.html', 'style.css', 'app.js']) {
   if (!fs.existsSync(path.join(DIST, f))) { console.error(`NG: dist/${f} がない`); ng++; }
 }
 const sitemap = fs.readFileSync(path.join(DIST, 'sitemap.xml'), 'utf8');
