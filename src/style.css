@@ -160,6 +160,15 @@ html.locked #gate{display:flex;min-height:100vh;align-items:center;justify-conte
 .gate-input{font-family:var(--font);font-size:28px;font-weight:800;text-align:center;letter-spacing:.1em;padding:12px;border:3px solid var(--line);border-radius:14px;background:var(--bg);color:var(--fg);width:100%}
 .gate-input:focus{outline:none;border-color:var(--accent)}
 .gate-err{margin:0;color:var(--ng);font-weight:800;font-size:14px}
+.gate-row{display:grid;gap:6px;text-align:left}
+.gate-label{font-size:13px;font-weight:800;color:var(--muted)}
+.gate-input.gate-name{font-size:22px;letter-spacing:.04em}
+.gate-note{margin:0;font-size:12px;color:var(--muted)}
+.gate-names{display:flex;flex-wrap:wrap;gap:6px}
+.gate-names button{font-size:15px;padding:8px 14px;border-radius:999px;background:var(--accent-soft);border-color:var(--accent-soft);color:var(--accent)}
+.who{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;margin:0 0 10px;font-weight:800;font-size:15px}
+.who b{color:var(--accent)}
+.who button.ghost{font-size:13px;text-decoration:underline;padding:4px 6px}
 button.big,.btn.big{font-size:18px;padding:14px 22px;border-radius:14px}
 
 /* ===== 👍👎 フィードバック ===== */

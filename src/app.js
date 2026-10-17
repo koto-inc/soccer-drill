@@ -1,6 +1,6 @@
 /* ポジショニングドリル：ブラウザ側の動き。
    ページはすべてビルド時に描画済み。ここでは
-   - 限定公開ゲート（合言葉）
+   - 限定公開ゲート（合言葉 ＋ なまえ。記録はなまえごとに分ける）
    - 問題ページ: 選択肢のタップ → 答え合わせ → 答え表示、「つぎの問題」の行き先、👍👎 フィードバック（押すまで次へ進めない）
    - TOP/カテゴリページ: 練習モード（カテゴリから1問ずつランダム）、◎○の印、最高記録
    - レベル別チャレンジ: 出題・タイム計測・採点・結果ページ
@@ -27,23 +27,102 @@
   function mmss(sec){ sec=Math.max(0,Math.round(sec)); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
   function fmtScore(s){ return (Math.round(s*10)/10).toString(); }
 
-  var solved=lsGet('pd-solved',{});
+  /* ===== なまえ（記録は名前ごと） =====
+     localStorage のキー:
+       'pd-pass'              合言葉（合っていればその値）
+       'pd-name'              いま使っているなまえ（文字列）
+       'pd-names'             この端末で使ったなまえの候補（新しい順、最大5件）
+       'pd:<name>:best'       レベル別ベスト {level:{score,time,rank,ts}}
+       'pd:<name>:solved'     解いた印 {qid:'ok'|'tried'}
+       'pd:<name>:fb'         👍👎 の送信済み {qid:payload}
+     名前なし時代の 'pd-best' / 'pd-solved' / 'pd-fb' は、この端末で最初に登録した名前に引きつぐ（それ以外は読まない） */
+  var NAME=(function(){ try{ return localStorage.getItem('pd-name')||''; }catch(e){ return ''; } })();
+  function nk(s){ return 'pd:'+NAME+':'+s; }
+  function saveName(name){
+    var list=lsGet('pd-names',[]);
+    var first=!list.length;
+    list=[name].concat(list.filter(function(n){ return n!==name; })).slice(0,5);
+    lsSet('pd-names',list);
+    try{ localStorage.setItem('pd-name',name); }catch(e){}
+    if(first){   // 最小限の移行: 名前なし時代の記録を、最初の名前に引きつぐ
+      ['best','solved','fb'].forEach(function(k){ var old=lsGet('pd-'+k,null); if(old&&lsGet('pd:'+name+':'+k,null)==null) lsSet('pd:'+name+':'+k,old); });
+    }
+  }
+  // FEEDBACK_ENDPOINT（GAS）へ送る。空なら何もしない。返事は読まない（no-cors）
+  function post(payload){
+    if(!CFG.feedback) return;
+    try{ fetch(CFG.feedback,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)}).catch(function(){}); }catch(e){}
+  }
 
-  /* ===== 限定公開ゲート ===== */
+  var solved=lsGet(nk('solved'),{});
+
+  /* ===== 限定公開ゲート（合言葉 ＋ なまえ） ===== */
+  function needPass(){ try{ return !!CFG.passcode && localStorage.getItem('pd-pass')!==CFG.passcode; }catch(e){ return !!CFG.passcode; } }
+  var openGate=function(){};
   function initGate(){
     var form=document.getElementById('gateForm');
-    if(!form||!CFG.passcode) return;
-    var input=document.getElementById('gateInput'), err=document.getElementById('gateErr');
-    if(document.documentElement.classList.contains('locked')) setTimeout(function(){ input.focus(); },50);
+    if(!form) return;
+    var passRow=document.getElementById('gatePassRow'), passInput=document.getElementById('gateInput');
+    var nameInput=document.getElementById('gateName'), names=document.getElementById('gateNames'), err=document.getElementById('gateErr');
+    function showErr(msg){ err.textContent=msg; err.hidden=false; }
+    function render(){
+      passRow.hidden=!needPass(); err.hidden=true;
+      var list=lsGet('pd-names',[]);
+      names.innerHTML=''; names.hidden=!list.length;
+      list.forEach(function(n){
+        var b=document.createElement('button'); b.type='button'; b.textContent=n;
+        b.addEventListener('click',function(){ nameInput.value=n; nameInput.focus(); });
+        names.appendChild(b);
+      });
+      setTimeout(function(){ (needPass()?passInput:nameInput).focus(); },50);
+    }
+    openGate=function(){
+      passInput.value=''; nameInput.value='';
+      ssSet('pd-ch',null); ssSet('pd-order',null);
+      render();
+      document.documentElement.classList.add('locked');
+      window.scrollTo({top:0});
+    };
+    if(document.documentElement.classList.contains('locked')) render();
     form.addEventListener('submit',function(ev){
       ev.preventDefault();
-      if(normalizePass(input.value)===CFG.passcode){
+      if(needPass()){
+        if(normalizePass(passInput.value)!==CFG.passcode){ showErr('あいことばがちがうみたい…。もう一回たしかめてね。'); passInput.value=''; passInput.focus(); return; }
         try{ localStorage.setItem('pd-pass',CFG.passcode); }catch(e){}
-        document.documentElement.classList.remove('locked');
-      }else{
-        err.hidden=false; input.value=''; input.focus();
+        passRow.hidden=true;
       }
+      var name=(nameInput.value||'').replace(/\s+/g,' ').trim();
+      if(!name||name.length>12){ showErr('なまえは1〜12文字で入れてね。'); nameInput.focus(); return; }
+      saveName(name);
+      location.reload();   // なまえごとの記録を読み直す
     });
+  }
+  // TOP / チャレンジページの「〇〇さんのきろく」「べつの人にかわる」
+  function initWho(){
+    var who=document.getElementById('who'); if(!who||!NAME) return;
+    document.getElementById('whoName').textContent=NAME;
+    who.hidden=false;
+    document.getElementById('btnSwitch').addEventListener('click',function(){ try{ localStorage.removeItem('pd-name'); }catch(e){} openGate(); });
+  }
+  // スプレッドシート（GAS の doGet）から、この名前のレベル別ベストを取って、端末内の記録とマージ（大きいほう）
+  function mergeRemoteBest(root){
+    if(!NAME||!CFG.feedback||!window.fetch) return;
+    try{
+      fetch(CFG.feedback+(CFG.feedback.indexOf('?')>=0?'&':'?')+'name='+encodeURIComponent(NAME))
+        .then(function(r){ return r.json(); })
+        .then(function(remote){
+          if(!remote||typeof remote!=='object') return;
+          var best=lsGet(nk('best'),{}), changed=false;
+          Object.keys(remote).forEach(function(lv){
+            var x=remote[lv]; if(!x||typeof x.score!=='number') return;
+            var t=Math.round(Number(x.time)||0), cur=best[lv];
+            if(!cur||x.score>cur.score||(x.score===cur.score&&t<cur.time)){
+              best[lv]={score:x.score,time:t,rank:rankOf(Number(lv),x.score,t).idx,ts:x.ts||''}; changed=true;
+            }
+          });
+          if(changed){ lsSet(nk('best'),best); showBest(root); }
+        }).catch(function(){});
+    }catch(e){}
   }
 
   /* ===== ランク（レベル × 点数 × タイム） ===== */
@@ -79,12 +158,12 @@
     });
   }
   function showBest(root){
-    var best=lsGet('pd-best',{});
+    var best=lsGet(nk('best'),{});
     (root||document).querySelectorAll('[data-best]').forEach(function(el){
       var b=best[el.getAttribute('data-best')];
-      if(!b) return;
+      if(!b){ el.hidden=true; return; }
       var r=RANKS[b.rank]||{emoji:'',name:''};
-      el.textContent='ベストきろく: '+r.emoji+' '+r.name+' '+fmtScore(b.score)+'点 '+mmss(b.time);
+      el.textContent=(NAME?NAME+'さんの':'')+'ベストきろく: '+r.emoji+' '+r.name+' '+fmtScore(b.score)+'点 '+mmss(b.time);
       el.hidden=false;
     });
   }
@@ -123,13 +202,15 @@
         ssSet('pd-ch',null);
       });
     });
-    showBest();
+    initWho();
+    showBest();          // まず端末内の記録
+    mergeRemoteBest();   // スプレッドシートに大きい記録があれば差し替え
   }
 
   /* ===== 👍👎 フィードバック（押すまで次へ進めない） ===== */
   function initFeedback(root,id,onVoted){
     var box=document.getElementById('feedback'); if(!box) return false;
-    var all=lsGet('pd-fb',{});
+    var all=lsGet(nk('fb'),{});
     var done=document.getElementById('fbDone'), input=document.getElementById('fbComment');
     var btns=box.querySelectorAll('.fbv');
     function showDone(vote){
@@ -139,13 +220,11 @@
     if(all[id]) showDone(all[id].vote);
     btns.forEach(function(b){
       b.addEventListener('click',function(){
-        var payload={qid:Number(id),vote:b.getAttribute('data-vote'),comment:(input.value||'').trim().slice(0,100),
+        var payload={type:'feedback',name:NAME,qid:Number(id),vote:b.getAttribute('data-vote'),comment:(input.value||'').trim().slice(0,100),
           level:Number(root.getAttribute('data-level')),phase:root.getAttribute('data-phase'),pos:root.getAttribute('data-pos'),
           ua:navigator.userAgent,ts:new Date().toISOString()};
-        all[id]=payload; lsSet('pd-fb',all);   // 1問につき1件（送り直しは上書き）
-        if(CFG.feedback){
-          try{ fetch(CFG.feedback,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)}).catch(function(){}); }catch(e){}
-        }
+        all[id]=payload; lsSet(nk('fb'),all);   // 1問につき1件（送り直しは上書き）
+        post(payload);
         showDone(payload.vote);
         onVoted();
         if(window.gtag){ try{ gtag('event','feedback',{question_id:id,vote:payload.vote}); }catch(e){} }
@@ -226,7 +305,7 @@
       if(hit===correct.length&&miss===0){cls='ok';icon='◎';msg='せいかい！';sub='全部あてた！';}
       else if(hit>0){cls='partial';icon='○';msg='おしい！';sub='せいかいは '+ck+'。あたりは '+hit+' つ'+(miss?('、ちがうのが '+miss+' つ'):'')+'。';}
       else{cls='ng';icon='×';msg='ざんねん…';sub='せいかいは '+ck+'。もう一回考えてみよう。';}
-      if(cls==='ok'||!solved[id]){ solved[id]=cls==='ok'?'ok':'tried'; lsSet('pd-solved',solved); }
+      if(cls==='ok'||!solved[id]){ solved[id]=cls==='ok'?'ok':'tried'; lsSet(nk('solved'),solved); }
       // チャレンジの採点とタイムを記録
       if(ch){
         var cur=ssGet('pd-ch');
@@ -257,7 +336,7 @@
   /* ===== チャレンジ 結果ページ ===== */
   function initChallengePage(el){
     var ch=ssGet('pd-ch');
-    bindStartButtons(el); showBest(el);
+    initWho(); bindStartButtons(el); showBest(el); mergeRemoteBest(el);
     if(!ch||!ch.ids||ch.results.length<ch.ids.length){
       // まだ終わっていない：途中なら「つづきから」を出す
       if(ch&&ch.ids&&ch.results.length>0){
@@ -270,10 +349,16 @@
     var total=ch.results.reduce(function(s,r){return s+r.score;},0);
     var time=ch.results.reduce(function(s,r){return s+(r.time||0);},0);
     var r=rankOf(level,total,time);
-    var best=lsGet('pd-best',{});
+    var best=lsGet(nk('best'),{});
     var prev=best[level];
     var isNew=!prev||total>prev.score||(total===prev.score&&time<prev.time);
-    if(isNew){ best[level]={score:total,time:Math.round(time),rank:r.idx,ts:new Date().toISOString()}; lsSet('pd-best',best); }
+    if(isNew){ best[level]={score:total,time:Math.round(time),rank:r.idx,ts:new Date().toISOString()}; lsSet(nk('best'),best); }
+    // 結果をスプレッドシートへ（同じ結果はリロードしても1回だけ送る）
+    if(CFG.feedback&&!ch.sent){
+      ch.sent=true; ssSet('pd-ch',ch);
+      post({type:'result',name:NAME,level:level,score:total,timeSec:Math.round(time),rank:r.name,rankIdx:r.idx,cleared:!r.over,
+        qids:ch.ids.map(Number),marks:ch.results.map(function(x){ return MARK[x.cls]; }).join(''),ts:new Date().toISOString()});
+    }
     var timeLine = r.limit
       ? (r.over ? '<p class="chtime over">⏱ タイム '+mmss(time)+' ／ もくひょう '+mmss(r.limit)+'<br><b>もくひょうタイムをすぎたので、ランク1つダウン</b></p>'
                 : '<p class="chtime ok">⏱ タイム '+mmss(time)+' ／ もくひょう '+mmss(r.limit)+'　<b>クリア！</b></p>')
@@ -286,7 +371,7 @@
         timeLine+
         '<div class="chrank"><span class="chemoji">'+esc(r.emoji)+'</span><span class="chname">'+esc(r.name)+'</span></div>'+
         '<p class="chmsg">'+esc(r.msg)+'</p>'+
-        (isNew?'<p class="chnew">🎉 '+esc(LVN[level])+'のベストきろく！</p>':'<p class="hint">'+esc(LVN[level])+'のベストきろく: '+esc(pr.name)+' '+fmtScore(prev.score)+'点 '+mmss(prev.time)+'</p>')+
+        (isNew?'<p class="chnew">🎉 '+esc(NAME?NAME+'さんの':'')+esc(LVN[level])+'のベストきろく！</p>':'<p class="hint">'+esc(NAME?NAME+'さんの':'')+esc(LVN[level])+'のベストきろく: '+esc(pr.name)+' '+fmtScore(prev.score)+'点 '+mmss(prev.time)+'</p>')+
       '</div>'+
       '<div class="card">'+
         '<p class="hint" style="margin-bottom:10px">◎=1点、○=0.5点、×=0点。タップすると、その問題をもう一度見られる。</p>'+

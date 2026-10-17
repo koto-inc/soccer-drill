@@ -280,19 +280,36 @@ function clientConfig() {
 }
 // 合言葉の正規化（全角→半角、小文字、空白除去）。app.js の normalizePass と同じにしておく
 const normalizePass = (s) => String(s).normalize('NFKC').toLowerCase().replace(/\s+/g, '');
-// 限定公開ゲート。TEAM_PASSCODE が空なら何も出さない。<html class="locked"> のときだけ表示される（CSS）
+// 限定公開ゲート（合言葉 ＋ なまえ）。<html class="locked"> のときだけ表示される（CSS）。
+// 合言葉がすでに合っている端末（「べつの人にかわる」のとき）は app.js が合言葉の欄を隠し、なまえだけ聞く。
+// TEAM_PASSCODE が空でも、なまえ（記録を分けるため）だけは聞く。
 function gateMarkup() {
-  if (!config.TEAM_PASSCODE) return '';
+  const lead = config.TEAM_PASSCODE
+    ? 'チームのみんなだけのページだよ。<br>コーチに聞いた<b>合言葉</b>と、きみの<b>なまえ</b>を入れてね。'
+    : 'きみの<b>なまえ</b>を入れてね。';
   return `<div id="gate" role="dialog" aria-labelledby="gateTitle">
   <form class="gate-card" id="gateForm" autocomplete="off">
     <div class="gate-logo">⚽</div>
     <h1 id="gateTitle">${esc(config.SITE_NAME)}</h1>
-    <p class="gate-lead">チームのみんなだけのページだよ。<br>コーチに聞いた<b>合言葉</b>を入れてね。</p>
-    <input class="gate-input" id="gateInput" type="text" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="あいことば" aria-label="合言葉" required>
-    <p class="gate-err" id="gateErr" hidden>ちがうみたい…。もう一回たしかめてね。</p>
+    <p class="gate-lead">${lead}</p>
+    <div class="gate-row" id="gatePassRow"${config.TEAM_PASSCODE ? '' : ' hidden'}>
+      <label class="gate-label" for="gateInput">あいことば</label>
+      <input class="gate-input" id="gateInput" type="text" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="あいことば" aria-label="合言葉">
+    </div>
+    <div class="gate-row">
+      <label class="gate-label" for="gateName">なまえ（ニックネームでOK）</label>
+      <input class="gate-input gate-name" id="gateName" type="text" maxlength="12" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="なまえ" aria-label="なまえ" required>
+      <div class="gate-names" id="gateNames" hidden></div>
+      <p class="gate-note">本名でなくてもいいよ。きろくを分けるために使うよ。</p>
+    </div>
+    <p class="gate-err" id="gateErr" hidden></p>
     <button class="primary big" type="submit">はいる</button>
   </form>
 </div>`;
+}
+// TOP と /challenge/ の「〇〇さんのきろく」「べつの人にかわる」（中身は app.js が書く）
+function whoMarkup() {
+  return `<p class="who" id="who" hidden><span><b id="whoName"></b>さんのきろく</span><button type="button" class="ghost" id="btnSwitch">べつの人にかわる</button></p>`;
 }
 // 解答ページの 👍👎 フィードバック（送信は app.js。送り先は site.config.mjs の FEEDBACK_ENDPOINT）
 function feedbackMarkup() {
@@ -315,7 +332,8 @@ function challengeButtons() {
 function challengeTopMarkup() {
   const c = config.CHALLENGE;
   const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  return `<section class="card challenge">
+  return `${whoMarkup()}
+<section class="card challenge">
   <h2 class="cath">${c.count}問チャレンジ</h2>
   <p class="hint" style="margin-bottom:10px">えらんだレベルからランダムに${c.count}問。◎=1点、○=0.5点で${c.count}点まんてん。タイムも計るよ（もくひょう ${LV[1]} ${mmss(c.timeLimit[1])}・${LV[2]} ${mmss(c.timeLimit[2])}・${LV[3]} ${mmss(c.timeLimit[3])}）。</p>
   <div class="chbtns">
@@ -334,7 +352,7 @@ function layout({ title, description, pathname, body, ogImage, ogType = 'website
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 ${config.NOINDEX ? '<meta name="robots" content="noindex,nofollow">' : ''}
-<script>window.PD_CONFIG=${JSON.stringify(clientConfig())};${config.TEAM_PASSCODE ? "(function(){try{if(localStorage.getItem('pd-pass')!==PD_CONFIG.passcode)document.documentElement.classList.add('locked');}catch(e){}})();" : ''}</script>
+<script>window.PD_CONFIG=${JSON.stringify(clientConfig())};(function(){try{var p=PD_CONFIG.passcode;if((p&&localStorage.getItem('pd-pass')!==p)||!localStorage.getItem('pd-name'))document.documentElement.classList.add('locked');}catch(e){}})();</script>
 <title>${esc(fullTitle)}</title>
 <meta name="description" content="${esc(description)}">
 <link rel="canonical" href="${esc(abs(pathname))}">
@@ -619,7 +637,7 @@ async function main() {
   }
   // 10問チャレンジ（進行・結果は端末側 app.js で描く）
   write('challenge/index.html', layout({ title: `${config.CHALLENGE.count}問チャレンジ`, description: `レベルをえらんでランダムに${config.CHALLENGE.count}問。◎=1点、○=0.5点、タイムも計る。何級までいけるかな？`, pathname: '/challenge/',
-    body: `<div id="challenge" data-page="challenge"><div class="card challenge"><h1 class="qtitle">${config.CHALLENGE.count}問チャレンジ</h1><p class="hint">レベルをえらんでね。ランダムに${config.CHALLENGE.count}問、◎=1点、○=0.5点。タイムも計るよ。</p><div class="chbtns" id="chLevels">${challengeButtons()}</div><div class="actions" style="justify-content:center"><a class="btn" href="${href('/')}">TOPへ</a></div><noscript><p class="hint">チャレンジには JavaScript がいります。</p></noscript></div></div>`,
+    body: `${whoMarkup()}<div id="challenge" data-page="challenge"><div class="card challenge"><h1 class="qtitle">${config.CHALLENGE.count}問チャレンジ</h1><p class="hint">レベルをえらんでね。ランダムに${config.CHALLENGE.count}問、◎=1点、○=0.5点。タイムも計るよ。</p><div class="chbtns" id="chLevels">${challengeButtons()}</div><div class="actions" style="justify-content:center"><a class="btn" href="${href('/')}">TOPへ</a></div><noscript><p class="hint">チャレンジには JavaScript がいります。</p></noscript></div></div>`,
     extraHead: '<meta name="robots" content="noindex">' }));
   // サッカーのことば（用語の一覧）
   write('words/index.html', wordsPage()); add('/words/', '0.4');
