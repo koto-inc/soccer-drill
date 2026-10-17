@@ -314,12 +314,12 @@ function whoMarkup() {
 // 解答ページの 👍👎 フィードバック（送信は app.js。送り先は site.config.mjs の FEEDBACK_ENDPOINT）
 function feedbackMarkup() {
   return `<div class="fb card" id="feedback">
-      <p class="fbq">この問題はどうだった？</p>
+      <p class="fbq">この問題は、いい問題だった？</p>
       <p class="fbneed" id="fbNeed">👍 か 👎 をおすと、つぎに進めるよ。</p>
-      <input class="fbc" id="fbComment" type="text" maxlength="100" placeholder="どこが分かりにくかった？（なくてもOK）" aria-label="ひとこと">
+      <input class="fbc" id="fbComment" type="text" maxlength="100" placeholder="よくなかったところは？（なくてもOK）" aria-label="ひとこと">
       <div class="fbbtns">
-        <button class="fbv" type="button" data-vote="good">👍 わかった！</button>
-        <button class="fbv" type="button" data-vote="bad">👎 むずかしい</button>
+        <button class="fbv" type="button" data-vote="good">👍 いい問題！</button>
+        <button class="fbv" type="button" data-vote="bad">👎 よくない</button>
       </div>
       <p class="fbdone" id="fbDone" hidden>ありがとう！</p>
     </div>`;
