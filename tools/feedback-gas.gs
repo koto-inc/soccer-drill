@@ -5,7 +5,7 @@
  *   - 1問ごとの答えログ（doPost, type:'answer' → シート 'answers'。問題を直すためのデータ。doGet では返さない）
  *   - 名前ごとのレベル別ベスト（doGet ?name=... → JSON）
  *
- * 使い方（README「フィードバック・結果の受け口」も参照）
+ * 使い方（README「👍👎・チャレンジ結果の受け口」も参照）
  * 1. 保存先のスプレッドシートを開く（SPREADSHEET_ID のシート。別のシートにしたいときは ID を書きかえる）
  * 2. メニュー「拡張機能」→「Apps Script」を開き、Code.gs の中身をこのファイルの内容で置きかえて保存
  * 3. 右上「デプロイ」→「新しいデプロイ」→ 種類「ウェブアプリ」
@@ -15,7 +15,7 @@
  *    site.config.mjs の FEEDBACK_ENDPOINT に貼って `npm run build`
  * 5. コードを直したら「デプロイ」→「デプロイを管理」→ 鉛筆 → バージョン「新バージョン」→ デプロイ（URL は変わらない）
  *
- * ---- doPost（サイト側は fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'}, body: JSON文字列 })）----
+ * ---- doPost（サイト側は navigator.sendBeacon(url, Blob(JSON文字列, 'text/plain'))。使えなければ fetch POST no-cors keepalive）----
  *   type:'feedback' { type, name, qid, vote:'good'|'bad', comment, reasons:[👎の理由チップの文字列], level, phase, pos, ua, ts }
  *                                                                                                  → 'feedback' シート
  *   type:'result'   { type, name, level:1|2|3, score, timeSec, rank(ランク名), rankIdx, cleared(目標タイム内なら true),

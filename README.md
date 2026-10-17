@@ -52,7 +52,7 @@ node tools/kanji-to-kana.mjs # 辞書（tools/kanji-to-kana.mjs の DICT）で�
 | `BASE_PATH` | 独自ドメインのルートに置くなら `''`。GitHub Pages のプロジェクトサイト（`https://ユーザー名.github.io/リポジトリ名/`）に置くなら `'/リポジトリ名'` |
 | `GA_MEASUREMENT_ID` | Google アナリティクス 4 の測定 ID（`G-XXXXXXXXXX`）。入れると全ページの `<head>` に計測タグが出力される。プレースホルダのままなら出力されない |
 | `ADSENSE_CLIENT` | AdSense の審査に通ったらパブリッシャー ID（`ca-pub-…`）を入れる。全ページにサイト用スクリプトが出力される |
-| `OWNER_NAME` / `OWNER_DESCRIPTION` / `CONTACT_EMAIL` / `CONTACT_FORM_URL` | 運営者情報・お問い合わせページに表示される |
+| `OWNER_NAME` / `OWNER_DESCRIPTION` / `CONTACT_EMAIL` / `CONTACT_FORM_URL` | 運営者情報・お問い合わせページと、フッターの「作った人」・author メタに表示される（今は「松本コーチ」） |
 | `LAST_UPDATED` | sitemap の更新日・プライバシーポリシーの制定日 |
 
 ## ディレクトリ構成
@@ -76,7 +76,7 @@ positioning-drill/
 │ │ └ q_partA.js, q_partB.js, q_partC.js   Q6〜Q100
 │ ├ pages/             固定ページ（about / privacy / contact）。{{SITE_NAME}} などは site.config.mjs の値に置き換わる
 │ ├ style.css          見た目（元の単一 HTML と同じ）
-│ ├ app.js             ブラウザ側の動き（選択 → 答え合わせ → 解説表示、カテゴリのランダム出題、◎○の印）
+│ ├ app.js             ブラウザ側の動き（合言葉＋なまえのゲート、選択 → 答え合わせ → 解説表示、👍👎、練習モード、10問チャレンジ、用語のタップ、スプレッドシートへの送信・取得）
 │ ├ assets/fonts/      OGP 画像の日本語を描くためのフォント（M PLUS Rounded 1c Bold、OFL）
 │ └ public/            （任意）ここに置いたファイルは dist/ 直下にそのままコピーされる（ads.txt、Search Console の確認ファイルなど）
 ├ dist/                ビルド結果（Git には入れない。これをそのまま公開する）
@@ -90,7 +90,9 @@ positioning-drill/
 | `/` | TOP。カテゴリ（レベル・場面・セットプレーの種類・ポジション）と全問一覧 |
 | `/q/001/` 〜 `/q/100/` | 問題ページ。問題文・ピッチ図・5択・（答え合わせ後に）結果・ポイント・各選択肢の理由と図 |
 | `/c/level-1/` など | カテゴリ一覧ページ（`/c/offense/`, `/c/set-play/`, `/c/goal-kick/`, `/c/fw/`, `/c/df-cb/` …） |
-| `/about/` `/privacy/` `/contact/` | 運営者情報・プライバシーポリシー・お問い合わせ（AdSense 審査用。子ども向けコンテンツである旨を記載） |
+| `/about/` `/privacy/` `/contact/` | 運営者情報・プライバシーポリシー・お問い合わせ（AdSense 審査用。子ども向けコンテンツである旨を記載）。`HIDE_INFO_PAGES: true` のあいだは作らない |
+| `/words/` | サッカーのことば（用語 79 語の一覧） |
+| `/challenge/` | 10問チャレンジのレベル選択・結果ページ（中身は app.js が描く） |
 | `/og/q-001.png` … `/og/default.png` | OGP 画像（1200×630、ピッチ図＋タイトル） |
 | `/sitemap.xml` `/robots.txt` `/404.html` `/favicon.svg` | |
 
@@ -139,7 +141,7 @@ positioning-drill/
 | `TEAM_PASSCODE` | 合言葉。設定すると初回アクセス時に「合言葉＋なまえ」画面が出て、正しければ端末（localStorage）に記憶して以後は出ない。ブラウザ側だけの簡易ゲートで、本気の認証ではない。大文字小文字・全角半角・空白は区別しない。`''` にすると合言葉は聞かず、なまえだけ聞く |
 | `NOINDEX` | `true` なら全ページに `noindex,nofollow` を付け、robots.txt を `Disallow: /` にする（検索に載らない）。一般公開するときは `false` にする |
 | `HIDE_INFO_PAGES` | `true` なら「コーチについて」「プライバシーポリシー」「お問い合わせ」の 3 ページを作らず、フッターのリンクも出さない（チーム内公開のあいだ用）。一般公開・AdSense 審査のときは `false` にする |
-| `FEEDBACK_ENDPOINT` | 👍👎 とチャレンジ結果の送り先・端末をまたいだベスト記録の取得先（下記）。空なら端末の localStorage だけで動く |
+| `FEEDBACK_ENDPOINT` | 👍👎・チャレンジ結果・1問ごとの答えログの送り先と、端末をまたいだベスト記録の取得先（下記）。空なら端末の localStorage だけで動く |
 | `RANKS` | 10問チャレンジのランク（点数の下限・絵文字・名前・一言）。並びは点数の低い順 |
 
 今は `TEAM_PASSCODE: 'JJC'`、`NOINDEX: true`、`HIDE_INFO_PAGES: true` になっている。**一般公開するときは 3 つとも外すこと。**
@@ -152,9 +154,9 @@ TOP の「入門チャレンジ」「中級チャレンジ」「上級チャレ�
 - タイム: 問題を見てから「答え合わせ」を押すまでを各問で計り、10問の合計を出す（解説を読んでいる時間は含めない）
 - 目標タイム（`CHALLENGE.timeLimit`、秒）: 入門 5:00 / 中級 6:00 / 上級 7:00。合計がこれを超えるとランクが 1 つ下がる（そのレベルの最低ランクより下には下がらない）
 - ランク: `RANKS` のはしご（アマチュア級 → 少年サッカーエース級 → 高校サッカー級 → Jリーグ級 → 日本代表級 → ワールドカップ級）を、`CHALLENGE.rankTable` でレベルごとに割り当てる。入門の 10 点は Jリーグ級、上級の 10 点はワールドカップ級
-- 結果ページ（`/challenge/`）: 合計点・タイム（目標クリア／オーバー）・ランク・各問の◎○×一覧（タップでその問題へ）・「もう一度」「べつのレベルに挑戦」「TOPへ」
-- 最高記録はレベルごとに端末（localStorage `pd-best`）に残り、TOP の各ボタンの下に「最高記録: Jリーグ級 7.5点 4:32」と出る
-- チャレンジ中は「別の問題」「もう一回」は出ない（最初の答えで採点）。進行は sessionStorage なので、タブを閉じると消える
+- 結果ページ（`/challenge/`）: 合計点・タイム（目標クリア／オーバー）・ランク・各問の◎○×一覧（タップでその問題へ）・「もう一度」「べつのレベルをやる」「TOPへ」
+- ベスト記録はなまえ×レベルごとに端末（localStorage `pd:<name>:best`）に残り、TOP と /challenge/ の各ボタンの下に「〇〇さんのベストきろく: 🏟️ Jリーグ級 7.5点 4:32」と出る（スプレッドシートに大きい記録があればそれに差し替わる）。結果ページにも「🎉 〇〇さんの入門のベストきろく！」と出る
+- チャレンジ中は「べつの問題」「もう一回」は出ない（最初の答えで採点）。進行は sessionStorage なので、タブを閉じると消える
 
 ### 練習モード
 
@@ -214,14 +216,14 @@ localStorage のキー:
 
 正答率は高いのに 👎 が多い問題は「解けるけど解説がわかりにくい」問題。逆に 👍 が多いのに正答率が低い問題は「解説を読んで納得はしている」ので、問題文や図の見せ方を直す。
 
-1. Google スプレッドシートを新規作成（名前は自由）
+1. 保存先のスプレッドシートを開く（`tools/feedback-gas.gs` の `SPREADSHEET_ID` に ID が入っている。別のシートにするときは、その ID を書きかえる）
 2. メニュー「拡張機能」→「Apps Script」を開き、Code.gs の中身を [tools/feedback-gas.gs](tools/feedback-gas.gs) で置きかえて保存
 3. 「デプロイ」→「新しいデプロイ」→ 種類「ウェブアプリ」→ 次のユーザーとして実行: **自分**、アクセスできるユーザー: **全員** →「デプロイ」（権限の承認が出たら許可）
 4. 表示された「ウェブアプリの URL」（`https://script.google.com/macros/s/…/exec`）を `FEEDBACK_ENDPOINT` に貼って `npm run build`
 5. 届いた内容はそのスプレッドシートの `feedback` / `results` / `answers` シートに 1 行ずつ追記される（ヘッダー行は自動で作られる）
 6. GAS のコードを直したら「デプロイ」→「デプロイを管理」→ 新バージョンでデプロイ（URL は変わらない）
 
-サイト側は `fetch(url, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON文字列 })` で送るので、CORS の設定は不要。ベスト記録の取得は通常の `fetch(url + '?name=…')` → `JSON.parse`（GAS のリダイレクトはそのまま follow）。
+サイト側は `navigator.sendBeacon(url, Blob(JSON文字列, text/plain))`（使えなければ `fetch(url, { method: 'POST', mode: 'no-cors', keepalive: true, headers: { 'Content-Type': 'text/plain' }, body: JSON文字列 })`）で送るので、CORS の設定は不要で、👍 の直後にページを移っても送信は消えない。ベスト記録の取得は通常の `fetch(url + '?name=…')` → `JSON.parse`（GAS のリダイレクトはそのまま follow）。
 
 ## 公開後にやること
 

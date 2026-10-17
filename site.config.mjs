@@ -30,9 +30,9 @@ export default {
 
   // 公開した年（プライバシーポリシーの制定日などに使う）
   PUBLISHED_YEAR: 2026,
-  LAST_UPDATED: '2026-10-16',
+  LAST_UPDATED: '2026-10-18',
 
-  // ===== チーム内限定公開フェーズ用（公開するときは TEAM_PASSCODE を '' に、NOINDEX を false にする） =====
+  // ===== チーム内限定公開フェーズ用（一般公開するときは TEAM_PASSCODE を '' に、NOINDEX と HIDE_INFO_PAGES を false にする） =====
   // 合言葉（空なら無効）。小学生が入力するので、ひらがなや数字の短いものに。大文字小文字・全角半角は区別しない。
   TEAM_PASSCODE: 'JJC',
   // true なら全ページに noindex,nofollow を付け、robots.txt でクロールを止める（検索に載らない）
@@ -40,7 +40,7 @@ export default {
   // true なら「コーチについて」「プライバシーポリシー」「お問い合わせ」のページを作らず、フッターのリンクも出さない（チーム内公開のあいだは隠す）
   HIDE_INFO_PAGES: true,
 
-  // 👍👎 フィードバックの送り先（Google Apps Script のウェブアプリURL）。空なら端末の localStorage に貯めるだけ。
+  // 👍👎・チャレンジ結果・答えログの送り先と、なまえごとのベスト記録の取得先（Google Apps Script のウェブアプリURL）。空なら端末の localStorage だけで動く。
   // 受け口の作り方は README と tools/feedback-gas.gs を参照。
   FEEDBACK_ENDPOINT: 'https://script.google.com/macros/s/AKfycbyYlHka9-uUrDGyPQtaQqmG60ZChFy-gy5Wj4a6VZfmoYEuVM_ZxGW18m58dvZDjjU3/exec',
 
