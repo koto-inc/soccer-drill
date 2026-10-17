@@ -40,7 +40,7 @@ export default {
 
   // 👍👎 フィードバックの送り先（Google Apps Script のウェブアプリURL）。空なら端末の localStorage に貯めるだけ。
   // 受け口の作り方は README と tools/feedback-gas.gs を参照。
-  FEEDBACK_ENDPOINT: '',
+  FEEDBACK_ENDPOINT: 'https://script.google.com/macros/s/AKfycbyYlHka9-uUrDGyPQtaQqmG60ZChFy-gy5Wj4a6VZfmoYEuVM_ZxGW18m58dvZDjjU3/exec',
 
   // ===== 10問チャレンジ =====
   // ランクのはしご（下から順）。絵文字は Windows の PC だと国旗（🇯🇵 など）が文字で出てしまうので、国旗以外を使う。
