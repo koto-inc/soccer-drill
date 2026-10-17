@@ -48,10 +48,13 @@
       ['best','solved','fb'].forEach(function(k){ var old=lsGet('pd-'+k,null); if(old&&lsGet('pd:'+name+':'+k,null)==null) lsSet('pd:'+name+':'+k,old); });
     }
   }
-  // FEEDBACK_ENDPOINT（GAS）へ送る。空なら何もしない。返事は読まない（no-cors）
+  // FEEDBACK_ENDPOINT（GAS）へ送る。空なら何もしない。返事は読まない。
+  // 👍 のすぐあとに「つぎの問題」でページを移っても送信が消えないよう、sendBeacon（だめなら keepalive 付き fetch）を使う
   function post(payload){
     if(!CFG.feedback) return;
-    try{ fetch(CFG.feedback,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)}).catch(function(){}); }catch(e){}
+    var body=JSON.stringify(payload);
+    try{ if(navigator.sendBeacon&&navigator.sendBeacon(CFG.feedback,new Blob([body],{type:'text/plain'}))) return; }catch(e){}
+    try{ fetch(CFG.feedback,{method:'POST',mode:'no-cors',keepalive:true,headers:{'Content-Type':'text/plain'},body:body}).catch(function(){}); }catch(e){}
   }
 
   var solved=lsGet(nk('solved'),{});
