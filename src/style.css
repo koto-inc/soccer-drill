@@ -127,6 +127,27 @@ h1.qtitle{font-size:18px}
   .choice,.item{transition:border-color .12s,background .12s}
 }
 
+/* ===== サッカー用語: 本文の点線下線（タップで説明）、「ことば」ボックス、/words/ の一覧 ===== */
+.term{text-decoration:underline dotted;text-decoration-color:var(--accent);text-decoration-thickness:2px;text-underline-offset:4px;cursor:pointer;border-radius:4px;padding:8px 2px;margin:-8px -2px}
+.term:hover,.term.open{background:var(--accent-soft)}
+.term:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.termpop{display:inline-block;font-size:13px;font-weight:500;line-height:1.5;color:var(--fg);background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:6px 10px;margin:4px 2px;vertical-align:middle;max-width:100%}
+.words{border:1px dashed var(--line);border-radius:12px;padding:10px 12px;margin:10px 0 4px;background:var(--bg)}
+.words .wtitle{font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.06em;margin-bottom:4px;cursor:pointer;padding:4px 0;list-style:none}
+.words .wtitle::before{content:"▼ ";font-size:10px}
+.words:not([open]) .wtitle::before{content:"▶ "}
+.words:not([open]) .wtitle{margin-bottom:0}
+.words dl{margin:0;display:grid;gap:4px}
+.words dl > div{font-size:13px;line-height:1.5}
+.words dt{display:inline;font-weight:800}
+.words dt::after{content:"：";font-weight:500;color:var(--muted)}
+.words dd{display:inline;margin:0;color:var(--muted)}
+.words .wmore{display:inline-block;font-size:12px;font-weight:800;margin-top:6px}
+.wordlist{margin:0;display:grid;gap:10px}
+.wordlist dt{font-weight:800;font-size:16px}
+.wordlist dt small{font-weight:500;color:var(--muted);font-size:12px;margin-left:4px}
+.wordlist dd{margin:2px 0 0;font-size:14px;color:var(--muted)}
+
 /* ===== 限定公開ゲート（合言葉） ===== */
 #gate{display:none}
 html.locked .wrap{display:none}

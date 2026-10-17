@@ -7,7 +7,9 @@
   "scripts": {
     "build": "node build.mjs",
     "serve": "node serve.mjs",
-    "check": "node check.mjs"
+    "check": "node check.mjs",
+    "check:kanji": "node tools/check-kanji.mjs",
+    "list-terms": "node tools/list-terms.mjs"
   },
   "engines": {
     "node": ">=20"

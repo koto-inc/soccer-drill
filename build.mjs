@@ -10,6 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import config from './site.config.mjs';
+import { TERMS } from './src/data/terms.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.join(ROOT, 'src');
@@ -35,7 +36,53 @@ const qpath = (id) => `/q/${qid(id)}/`;
 /* ===================== 共通 ===================== */
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const KEYS = ['ア', 'イ', 'ウ', 'エ', 'オ'];
-const LV = { 1: '初級', 2: '中級', 3: '上級' };
+const LV = { 1: '入門', 2: '中級', 3: '上級' };
+
+/* ===== サッカー用語（src/data/terms.js）: 本文の初出に下線、問題ごとの「ことば」ボックス ===== */
+const TERM_BY_FORM = new Map();
+TERMS.forEach((t, i) => { t.id = i; for (const f of (t.forms || [t.t, ...(t.alt || [])])) TERM_BY_FORM.set(f, t); });
+const TERM_FORMS = [...TERM_BY_FORM.keys()].sort((a, b) => b.length - a.length);   // 長い語から先に照合
+const TERM_RE = new RegExp(TERM_FORMS.map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+const isKana = (ch) => !!ch && /[ァ-ヶー]/.test(ch);
+// 文章中の用語の位置を列挙する（カタカナ語の途中にある短い語は数えない）
+function findTerms(text) {
+  const out = [];
+  for (const m of text.matchAll(TERM_RE)) {
+    const f = m[0];
+    if (isKana(text[m.index - 1]) || isKana(text[m.index + f.length])) continue;
+    out.push({ index: m.index, form: f, term: TERM_BY_FORM.get(f) });
+  }
+  return out;
+}
+// その問題に出てくる用語（title / q / 選択肢 / why / point / 図のラベル）。hide の語は除く
+function termsIn(q) {
+  const labs = (a) => [...((a && a.zones) || []).map((z) => z.l), ...((a && a.labels) || []).map((l) => l.t)];
+  const texts = [q.title, q.q, ...q.options.flatMap((o) => [o.text, o.why, ...labs(o.a)]), q.point, ...labs(q.scene)].filter(Boolean);
+  const seen = new Set();
+  for (const t of texts) for (const h of findTerms(t)) if (!h.term.hide) seen.add(h.term);
+  return [...seen].sort((a, b) => a.id - b.id);
+}
+// HTML エスケープしつつ、用語の初出（seen に無いもの）を <span class="term"> で包む。seen は同じ画面内で共有する
+function markTerms(text, seen) {
+  let out = '', last = 0;
+  for (const h of findTerms(text)) {
+    if (h.term.hide || seen.has(h.term.id)) continue;
+    seen.add(h.term.id);
+    out += esc(text.slice(last, h.index)) + `<span class="term" role="button" tabindex="0" data-term="${esc(h.term.t)}" data-d="${esc(h.term.d)}">${esc(h.form)}</span>`;
+    last = h.index + h.form.length;
+  }
+  return out + esc(text.slice(last));
+}
+function wordsBox(q) {
+  const list = termsIn(q);
+  if (!list.length) return '';
+  // 用語が多い問題でも選択肢が遠くならないよう、<details> でとじられるようにする（最初は開いている）
+  return `<details class="words" open>
+        <summary class="wtitle">ことば（${list.length}）</summary>
+        <dl>${list.map((t) => `<div><dt>${esc(t.t)}</dt><dd>${esc(t.d)}</dd></div>`).join('')}</dl>
+        <a class="wmore" href="${href('/words/')}">ほかのことばも見る →</a>
+      </details>`;
+}
 
 /* ===== カテゴリ（TOPで選ぶ出題範囲） ===== */
 const CATS = [
@@ -45,13 +92,13 @@ const CATS = [
     { key: 'phase', val: 'オフェンス', label: 'オフェンス', slug: 'offense' },
     { key: 'phase', val: 'ディフェンス', label: 'ディフェンス', slug: 'defense' },
     { key: 'phase', val: 'セットプレー', label: 'セットプレー', slug: 'set-play' }] },
-  { group: 'セットプレーの種類', items: [
+  { group: 'セットプレーのしゅるい', items: [
     { key: 'situ', val: 'ゴールキック', label: 'ゴールキック', slug: 'goal-kick' },
     { key: 'situ', val: 'スローイン', label: 'スローイン', slug: 'throw-in' },
-    { key: 'situ', val: 'コーナーキック', label: 'コーナー（攻守）', slug: 'corner-kick' },
-    { key: 'situ', val: 'フリーキック', label: 'フリーキック（攻守）', slug: 'free-kick' },
-    { key: 'situ', val: 'キックオフ', label: 'キックオフ（攻守）', slug: 'kick-off' },
-    { key: 'situ', val: 'PK', label: 'PK（攻守）', slug: 'pk' }] },
+    { key: 'situ', val: 'コーナーキック', label: 'コーナー（せめ・守り）', slug: 'corner-kick' },
+    { key: 'situ', val: 'フリーキック', label: 'フリーキック（せめ・守り）', slug: 'free-kick' },
+    { key: 'situ', val: 'キックオフ', label: 'キックオフ（せめ・守り）', slug: 'kick-off' },
+    { key: 'situ', val: 'PK', label: 'PK（せめ・守り）', slug: 'pk' }] },
   { group: 'ポジション', items: [
     { key: 'pos', val: 'FW', label: 'FW', slug: 'fw' },
     { key: 'pos', val: 'MF（中央）', label: 'MF（中央）', slug: 'mf-center' },
@@ -194,8 +241,8 @@ function badges(q) {
   const b = (c, cls, text) => c ? `<a class="badge ${cls}" href="${href(catPath(c))}">${esc(text)}</a>` : `<span class="badge ${cls}">${esc(text)}</span>`;
   return `<div class="badges">${b(lv, `lv${q.level}`, LV[q.level])}${b(ph, '', q.phase)}${b(po, '', q.pos)}${b(si, '', q.situ)}</div>`;
 }
-const LEGEND_FACE = `<span><svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true"><path d="M2 12 L15 3 A9 9 0 0 1 16 11 Z" fill="#ffd23f" fill-opacity=".6" stroke="#9a5b00" stroke-width=".8"/><line x1="2" y1="12" x2="12" y2="7" stroke="#9a5b00" stroke-width="1.2"/></svg>体の向き（扇）</span>`;
-const LEGEND_TOUCH = `<span><svg width="26" height="12" viewBox="0 0 26 12" aria-hidden="true"><line x1="1" y1="6" x2="13" y2="6" stroke="#555" stroke-width="3" stroke-linecap="round"/><path d="M12 2 L17 6 L12 10 Z" fill="#555"/><circle cx="21.5" cy="6" r="3.5" fill="#fff" stroke="#333" stroke-width="1"/></svg>タッチ（太い矢印＋ボール）</span>`;
+const LEGEND_FACE = `<span><svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true"><path d="M2 12 L15 3 A9 9 0 0 1 16 11 Z" fill="#ffd23f" fill-opacity=".6" stroke="#9a5b00" stroke-width=".8"/><line x1="2" y1="12" x2="12" y2="7" stroke="#9a5b00" stroke-width="1.2"/></svg>体の向き（おうぎ）</span>`;
+const LEGEND_TOUCH = `<span><svg width="26" height="12" viewBox="0 0 26 12" aria-hidden="true"><line x1="1" y1="6" x2="13" y2="6" stroke="#555" stroke-width="3" stroke-linecap="round"/><path d="M12 2 L17 6 L12 10 Z" fill="#555"/><circle cx="21.5" cy="6" r="3.5" fill="#fff" stroke="#333" stroke-width="1"/></svg>タッチ（太いやじるし＋ボール）</span>`;
 function legend(q) {
   const extra = (q && q.level >= 2 ? LEGEND_FACE : '') + (q && q.level >= 3 ? LEGEND_TOUCH : '');
   return `<div class="legend"><span><i class="dot" style="background:var(--us)"></i>味方</span><span><i class="dot" style="background:var(--them)"></i>相手</span><span><i class="dot" style="background:var(--us);box-shadow:0 0 0 2px var(--me)"></i>きみ</span><span><i class="dot" style="background:#fff;border:1px solid #333"></i>ボール</span>${extra}</div>`;
@@ -204,7 +251,7 @@ const isPlaceholder = (v) => !v || /X{4,}/.test(v);
 
 function analyticsTag() {
   if (isPlaceholder(config.GA_MEASUREMENT_ID)) {
-    return `<!-- Google Analytics 4: site.config.mjs の GA_MEASUREMENT_ID に測定ID（G-XXXXXXXXXX）を入れると、ここに計測タグが出力される -->`;
+    return `<!-- Google Analytics 4: site.config.mjs の GA_MEASUREMENT_ID に測定ID（G-XXXXXXXXXX）を入れると、ここに計測タグが出力される -->`; // kanji-ok
   }
   const id = esc(config.GA_MEASUREMENT_ID);
   return `<!-- Google Analytics 4 -->
@@ -213,7 +260,7 @@ function analyticsTag() {
 }
 function adsenseTag() {
   if (isPlaceholder(config.ADSENSE_CLIENT)) {
-    return `<!-- Google AdSense: 審査に通ったら site.config.mjs の ADSENSE_CLIENT に ca-pub-XXXX を入れる。ここにサイト全体用のスクリプトが出力される -->`;
+    return `<!-- Google AdSense: 審査に通ったら site.config.mjs の ADSENSE_CLIENT に ca-pub-XXXX を入れる。ここにサイト全体用のスクリプトが出力される -->`; // kanji-ok
   }
   // 子ども向けコンテンツ: 広告ユニットには data-tag-for-child-directed-treatment="1" を付ける（AdSense ヘルプ「子ども向けとして広告リクエストにタグを付ける」を参照）
   return `<!-- Google AdSense -->
@@ -221,7 +268,7 @@ function adsenseTag() {
 }
 // 広告枠。審査通過後、AdSense で作った広告ユニットのコード（<ins class="adsbygoogle" ...>）をこのコメントの位置に出力する。
 function adSlot(name, note) {
-  return `\n<!-- AD SLOT: ${name} — ${note}。AdSense の広告ユニットコードをここに貼る（子ども向けのため data-tag-for-child-directed-treatment="1" を付ける） -->\n<div class="adslot" data-ad-slot="${name}"></div>\n`;
+  return `\n<!-- AD SLOT: ${name} — ${note}。AdSense の広告ユニットコードをここに貼る（子ども向けのため data-tag-for-child-directed-treatment="1" を付ける） -->\n<div class="adslot" data-ad-slot="${name}"></div>\n`; // kanji-ok
 }
 
 // 端末側（app.js）に渡す設定
@@ -251,7 +298,7 @@ function gateMarkup() {
 function feedbackMarkup() {
   return `<div class="fb card" id="feedback">
       <p class="fbq">この問題はどうだった？</p>
-      <p class="fbneed" id="fbNeed">👍 か 👎 を押すと、つぎに進めるよ。</p>
+      <p class="fbneed" id="fbNeed">👍 か 👎 をおすと、つぎに進めるよ。</p>
       <input class="fbc" id="fbComment" type="text" maxlength="100" placeholder="どこが分かりにくかった？（なくてもOK）" aria-label="ひとこと">
       <div class="fbbtns">
         <button class="fbv" type="button" data-vote="good">👍 わかった！</button>
@@ -270,7 +317,7 @@ function challengeTopMarkup() {
   const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   return `<section class="card challenge">
   <h2 class="cath">${c.count}問チャレンジ</h2>
-  <p class="hint" style="margin-bottom:10px">えらんだレベルからランダムに${c.count}問。◎=1点、○=0.5点で${c.count}点満点。タイムも計るよ（目標 初級 ${mmss(c.timeLimit[1])}・中級 ${mmss(c.timeLimit[2])}・上級 ${mmss(c.timeLimit[3])}）。</p>
+  <p class="hint" style="margin-bottom:10px">えらんだレベルからランダムに${c.count}問。◎=1点、○=0.5点で${c.count}点まんてん。タイムも計るよ（もくひょう ${LV[1]} ${mmss(c.timeLimit[1])}・${LV[2]} ${mmss(c.timeLimit[2])}・${LV[3]} ${mmss(c.timeLimit[3])}）。</p>
   <div class="chbtns">
     ${challengeButtons()}
   </div>
@@ -324,14 +371,15 @@ ${gateMarkup()}
 ${body}
   </main>
   <footer class="foot">
-    <p>青＝味方、赤＝相手、黄色のふちどり＝きみ。攻める方向は上向き（ディフェンスの問題は自分のゴールが下）。扇＝体の向き（黄色の扇は正しい向き）、太い矢印＋ボール＝ファーストタッチ。</p>
-    <nav aria-label="サイト情報">
+    <p>青＝味方、赤＝相手、黄色のふちどり＝きみ。せめる方向は上向き（ディフェンスの問題は自分のゴールが下）。おうぎ＝体の向き（黄色のおうぎは正しい向き）、太いやじるし＋ボール＝ファーストタッチ。</p>
+    <nav aria-label="サイトのリンク">
       <a href="${href('/')}">TOP</a>
-      <a href="${href('/about/')}">運営者情報</a>
+      <a href="${href('/words/')}">サッカーのことば</a>
+      <a href="${href('/about/')}">コーチについて</a>
       <a href="${href('/privacy/')}">プライバシーポリシー</a>
       <a href="${href('/contact/')}">お問い合わせ</a>
     </nav>
-    <p>© ${config.PUBLISHED_YEAR} ${esc(config.SITE_NAME)}（運営：<a href="${href('/about/')}">${esc(config.OWNER_NAME)}</a>）</p>
+    <p>© ${config.PUBLISHED_YEAR} ${esc(config.SITE_NAME)}（作った人：<a href="${href('/about/')}">${esc(config.OWNER_NAME)}</a>）</p>
   </footer>
 </div>
 <script src="${href('/app.js')}" defer></script>
@@ -344,26 +392,29 @@ ${body}
 function questionPage(q) {
   const prev = QUESTIONS[q.id - 2], next = QUESTIONS[q.id] || QUESTIONS[0];
   const correct = q.options.map((o, i) => (o.ok ? i : -1)).filter((i) => i >= 0);
-  const description = `${q.q} 正解は${correct.length}つ。${LV[q.level]}・${q.phase}・${q.pos}の問題。答えと理由、動きを図で解説。`.slice(0, 150);
+  const description = `${q.q} せいかいは${correct.length}つ。${LV[q.level]}・${q.phase}・${q.pos}の問題。答えと理由、動きを図でかいせつ。`.slice(0, 150);
   const head = (sub) => `<div class="qno"><span class="catname">全${QUESTIONS.length}問</span>　<span class="qpos">${sub}</span>　<span class="qid">Q${q.id}</span></div>`;
+  // 用語の下線は画面（問題 / 答え）ごとに初出だけ。選択肢ボタンの中には付けない（ボタンの中にボタンは置けない）
+  const seenQ = new Set(), seenA = new Set();
   const body = `
 <article data-qid="${q.id}" data-level="${q.level}" data-phase="${esc(q.phase)}" data-pos="${esc(q.pos)}" data-title="${esc(q.title)}">
   <section id="qview">
     <div class="card">
       ${head('')}
       ${badges(q)}
-      <h1 class="qtitle">${esc(q.title)}</h1>
+      <h1 class="qtitle">${markTerms(q.title, seenQ)}</h1>
       ${renderScene(q.scene, null, 'q' + q.id)}
       ${legend(q)}
-      <p class="qtext">${esc(q.q)}</p>
-      <p class="hint">正しいと思うものを全部えらぼう（1〜3個）。</p>
-      <div class="choices" role="group" aria-label="選択肢">
+      <p class="qtext">${markTerms(q.q, seenQ)}</p>
+      ${wordsBox(q)}
+      <p class="hint">正しいと思うものを全部えらぼう（1〜3つ）。</p>
+      <div class="choices" role="group" aria-label="こたえのえらびかた">
         ${q.options.map((o, i) => `<button class="choice" type="button" role="checkbox" aria-checked="false" data-i="${i}" data-ok="${o.ok ? 1 : 0}"><span class="k">${KEYS[i]}</span><span>${esc(o.text)}</span></button>`).join('\n        ')}
       </div>
-      <noscript><p class="hint">答え合わせには JavaScript が必要です。</p></noscript>
+      <noscript><p class="hint">答え合わせには JavaScript がいります。</p></noscript>
       <div class="actions">
         <button class="primary" id="btnAnswer" type="button" disabled>答え合わせ</button>
-        <a class="btn" href="${href(qpath(next.id))}" data-next data-skip>別の問題</a>
+        <a class="btn" href="${href(qpath(next.id))}" data-next data-skip>べつの問題</a>
       </div>
     </div>
   </section>
@@ -371,25 +422,25 @@ function questionPage(q) {
     <div class="card">
       ${head('答え')}
       ${badges(q)}
-      <div class="qtitle">${esc(q.title)}</div>
+      <div class="qtitle">${markTerms(q.title, seenA)}</div>
       <div id="result" class="result"></div>
-      <div class="point"><b>ポイント</b>　${esc(q.point)}</div>
+      <div class="point"><b>ポイント</b>　${markTerms(q.point, seenA)}</div>
     </div>
     ${q.options.map((o, i) => `
     <div class="ans ${o.ok ? 'ok' : 'ng'}" data-i="${i}">
-      <div class="head"><span class="mark">${o.ok ? '○' : '×'}</span><span style="flex:1;min-width:0">${KEYS[i]}　${esc(o.text)}</span><span class="you" hidden>きみの答え</span></div>
-      <p class="why">${esc(o.why)}</p>
+      <div class="head"><span class="mark">${o.ok ? '○' : '×'}</span><span style="flex:1;min-width:0">${KEYS[i]}　${markTerms(o.text, seenA)}</span><span class="you" hidden>きみの答え</span></div>
+      <p class="why">${markTerms(o.why, seenA)}</p>
       ${o.ok && o.a ? renderScene(q.scene, o.a, 'a' + q.id + '-' + i) : ''}
     </div>`).join('')}
     ${feedbackMarkup()}
-    ${adSlot('answer-bottom', '解説を読み終えたあと、「つぎの問題」ボタンの上')}
+    ${adSlot('answer-bottom', 'かいせつを読み終えたあと、「つぎの問題」ボタンの上')}
     <div class="actions">
       <a class="btn primary" href="${href(qpath(next.id))}" data-next>つぎの問題</a>
       <button id="btnRetry" type="button">もう一回</button>
       <a class="btn" href="${href('/')}">TOPへ</a>
     </div>
   </section>
-  <nav class="pn" aria-label="前後の問題">
+  <nav class="pn" aria-label="前の問題・次の問題">
     ${prev ? `<a href="${href(qpath(prev.id))}" rel="prev">← Q${prev.id} ${esc(prev.title)}</a>` : '<span></span>'}
     ${QUESTIONS[q.id] ? `<a href="${href(qpath(next.id))}" rel="next">Q${next.id} ${esc(next.title)} →</a>` : '<span></span>'}
   </nav>
@@ -422,7 +473,7 @@ function indexPage() {
   const body = `
 ${challengeTopMarkup()}
 <h2 class="cath" style="margin-top:6px">練習する</h2>
-<p class="intro">カテゴリをえらぼう。えらんだカテゴリの問題が、1問ずつランダムに出てくる（採点やタイムはなし。好きなだけ解ける）。<span class="hint">（全 ${QUESTIONS.length} 問・せいかい <span id="doneAll">0</span> 問）</span></p>
+<p class="intro">カテゴリをえらぼう。えらんだカテゴリの問題が、1問ずつランダムに出てくる（点数やタイムはなし。すきなだけできる）。<span class="hint">（全 ${QUESTIONS.length} 問・せいかい <span id="doneAll">0</span> 問）</span></p>
 ${CATS.map((g) => `
 <section class="catgroup">
   ${g.group ? `<h2 class="cath">${esc(g.group)}</h2>` : ''}
@@ -432,15 +483,15 @@ ${CATS.map((g) => `
 </section>`).join('')}
 <section class="card" id="about-site">
   <h2 class="cath">このサイトについて</h2>
-  <p class="about-site">${esc(config.SITE_DESCRIPTION)} ピッチ図の青は味方、赤は相手、黄色のふちどりが「きみ」。ボールの場所と味方・相手の位置を見て、「つぎ、どこへ動く？」を考えよう。正解は1つとはかぎらない（1〜3個）。答え合わせをすると、正解の動きが矢印つきの図で、ちがう答えには理由がつく。中級からは「体の向き」（扇の形）、上級からは「ファーストタッチ」（太い矢印とボール）も考える。</p>
-  <p class="about-site">コーチや保護者の方へ：練習前の5分、送迎の車の中、試合の前日など、短い時間で「考える習慣」をつけるために作った問題集です。問題の内容についてのご意見は <a href="${href('/contact/')}">お問い合わせ</a> からどうぞ。</p>
+  <p class="about-site">${esc(config.SITE_DESCRIPTION)} ピッチ図の青は味方、赤は相手、黄色のふちどりが「きみ」。ボールの場所と味方・相手のいる場所を見て、「つぎ、どこへ動く？」を考えよう。せいかいは1つとはかぎらない（1〜3つ）。答え合わせをすると、せいかいの動きがやじるしつきの図で、ちがう答えには理由がつく。中級からは「体の向き」（おうぎの形）、上級からは「ファーストタッチ」（太いやじるしとボール）も考える。わからないことばは <a href="${href('/words/')}">サッカーのことば</a> で調べられる。</p>
+  <p class="about-site">コーチやおうちの人へ：練習前の5分、車の中、しあいの前の日など、短い時間で「考えるくせ」をつけるために作った問題集です。問題についてのご意見は <a href="${href('/contact/')}">お問い合わせ</a> からどうぞ。</p>
 </section>
 <section class="card" id="list">
-  <h2 class="cath">問題一覧（全 ${QUESTIONS.length} 問）</h2>
-  <p class="hint" style="margin-bottom:10px">◎は全部せいかいした問題、○は挑戦した問題。</p>
+  <h2 class="cath">問題リスト（全 ${QUESTIONS.length} 問）</h2>
+  <p class="hint" style="margin-bottom:10px">◎は全部せいかいした問題、○はやってみた問題。</p>
   ${questionList(QUESTIONS, '全部の問題から')}
 </section>
-${adSlot('home-bottom', 'TOPページの問題一覧の下')}`;
+${adSlot('home-bottom', 'TOPページの問題一覧の下')}`; // kanji-ok
   const jsonld = { '@context': 'https://schema.org', '@type': 'WebSite', name: config.SITE_NAME, url: abs('/'), description: config.SITE_DESCRIPTION, inLanguage: 'ja', author: { '@type': 'Person', name: config.OWNER_NAME } };
   return layout({ title: config.SITE_NAME, description: config.SITE_DESCRIPTION, pathname: '/', body, h1site: true,
     extraHead: `<script type="application/ld+json">${JSON.stringify(jsonld)}</script>` });
@@ -458,23 +509,39 @@ function categoryPage(c) {
   <a class="btn" href="${href('/')}">カテゴリをえらび直す</a>
 </div>
 <div class="card">
-  <p class="hint" style="margin-bottom:10px">「${esc(c.label)}」の問題 ${list.length} 問。◎は全部せいかいした問題、○は挑戦した問題。</p>
+  <p class="hint" style="margin-bottom:10px">「${esc(c.label)}」の問題 ${list.length} 問。◎は全部せいかいした問題、○はやってみた問題。</p>
   ${questionList(list, c.label)}
 </div>
-${adSlot('list-bottom', 'カテゴリページの問題一覧の下')}`;
+${adSlot('list-bottom', 'カテゴリページの問題一覧の下')}`; // kanji-ok
   return layout({ title, description, pathname: catPath(c), body });
+}
+
+/* ===================== サッカーのことば（用語の一覧） ===================== */
+function wordsPage() {
+  const sorted = [...TERMS].sort((a, b) => a.t.localeCompare(b.t, 'ja'));
+  const body = `
+<nav class="hint" aria-label="パンくず"><a href="${href('/')}">TOP</a> › サッカーのことば</nav>
+<h1 class="qtitle">サッカーのことば（${TERMS.length} 語）</h1>
+<p class="hint">問題に出てくることばの意味。問題のページでは、点線の下線がついたことばをタップしても見られる。</p>
+<div class="card">
+  <dl class="wordlist">
+    ${sorted.map((t) => `<div id="w-${t.id}"><dt>${esc(t.t)}${t.alt && t.alt.length ? `<small>（${t.alt.map(esc).join('・')}）</small>` : ''}</dt><dd>${esc(t.d)}</dd></div>`).join('\n    ')}
+  </dl>
+</div>
+<div class="actions"><a class="btn" href="${href('/')}">TOPへ</a></div>`;
+  return layout({ title: 'サッカーのことば', description: `問題に出てくるサッカーのことば ${TERMS.length} 語の、かんたんな意味。`, pathname: '/words/', body });
 }
 
 /* ===================== 固定ページ ===================== */
 function staticPage(file) {
   let html = fs.readFileSync(path.join(SRC, 'pages', file), 'utf8');
   const m = html.match(/^<!--\s*title:\s*(.*?)\s*\|\s*description:\s*(.*?)\s*-->\s*/);
-  if (!m) throw new Error(`${file}: 先頭に <!-- title: ... | description: ... --> が必要`);
+  if (!m) throw new Error(`${file}: 先頭に <!-- title: ... | description: ... --> が必要`); // kanji-ok
   html = html.slice(m[0].length);
   html = html.replace(/\{\{(\w+)\}\}/g, (_, k) => {
     if (k === 'CONTACT_FORM') return config.CONTACT_FORM_URL ? `<p><a class="btn primary" href="${esc(config.CONTACT_FORM_URL)}" target="_blank" rel="noopener">お問い合わせフォームを開く</a></p>` : '';
-    if (k === 'ADSENSE_NOTE') return isPlaceholder(config.ADSENSE_CLIENT) ? '' : '<p>当サイトは Google AdSense を利用して広告を配信しています。</p>';
-    if (!(k in config)) throw new Error(`${file}: 未定義のプレースホルダ {{${k}}}`);
+    if (k === 'ADSENSE_NOTE') return isPlaceholder(config.ADSENSE_CLIENT) ? '' : '<p>当サイトは Google AdSense を利用して広告を配信しています。</p>'; // kanji-ok
+    if (!(k in config)) throw new Error(`${file}: 未定義のプレースホルダ {{${k}}}`); // kanji-ok
     return esc(config[k]);
   });
   const slug = file.replace(/\.html$/, '');
@@ -485,10 +552,10 @@ function staticPage(file) {
 async function makeOgRenderer() {
   let Resvg;
   try { ({ Resvg } = await import('@resvg/resvg-js')); }
-  catch { console.warn('  [注意] @resvg/resvg-js が無いので OGP画像（PNG）は作らない。`npm install` で入る。'); return null; }
+  catch { console.warn('  [注意] @resvg/resvg-js が無いので OGP画像（PNG）は作らない。`npm install` で入る。'); return null; } // kanji-ok
   const fontDir = path.join(SRC, 'assets', 'fonts');
   const fontFiles = fs.existsSync(fontDir) ? fs.readdirSync(fontDir).filter((f) => /\.(ttf|otf)$/i.test(f)).map((f) => path.join(fontDir, f)) : [];
-  if (!fontFiles.length) console.warn('  [注意] src/assets/fonts にフォントが無い。OGP画像の日本語が崩れることがある。');
+  if (!fontFiles.length) console.warn('  [注意] src/assets/fonts にフォントが無い。OGP画像の日本語が崩れることがある。'); // kanji-ok
   const cacheDir = path.join(ROOT, '.og-cache');
   fs.mkdirSync(cacheDir, { recursive: true });
   return (svg) => {
@@ -533,7 +600,7 @@ const favicon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><re
 async function main() {
   const t0 = Date.now();
   if (!/^https?:\/\//.test(config.SITE_URL) || /example\.com/.test(config.SITE_URL)) {
-    console.warn('  [注意] site.config.mjs の SITE_URL が仮のまま（' + config.SITE_URL + '）。公開前に独自ドメインへ変えること。');
+    console.warn('  [注意] site.config.mjs の SITE_URL が仮のまま（' + config.SITE_URL + '）。公開前に独自ドメインへ変えること。'); // kanji-ok
   }
   fs.rmSync(DIST, { recursive: true, force: true });
   fs.mkdirSync(DIST, { recursive: true });
@@ -552,8 +619,10 @@ async function main() {
   }
   // 10問チャレンジ（進行・結果は端末側 app.js で描く）
   write('challenge/index.html', layout({ title: `${config.CHALLENGE.count}問チャレンジ`, description: `レベルをえらんでランダムに${config.CHALLENGE.count}問。◎=1点、○=0.5点、タイムも計る。何級までいけるかな？`, pathname: '/challenge/',
-    body: `<div id="challenge" data-page="challenge"><div class="card challenge"><h1 class="qtitle">${config.CHALLENGE.count}問チャレンジ</h1><p class="hint">レベルをえらんでね。ランダムに${config.CHALLENGE.count}問、◎=1点、○=0.5点。タイムも計るよ。</p><div class="chbtns" id="chLevels">${challengeButtons()}</div><div class="actions" style="justify-content:center"><a class="btn" href="${href('/')}">TOPへ</a></div><noscript><p class="hint">チャレンジには JavaScript が必要です。</p></noscript></div></div>`,
+    body: `<div id="challenge" data-page="challenge"><div class="card challenge"><h1 class="qtitle">${config.CHALLENGE.count}問チャレンジ</h1><p class="hint">レベルをえらんでね。ランダムに${config.CHALLENGE.count}問、◎=1点、○=0.5点。タイムも計るよ。</p><div class="chbtns" id="chLevels">${challengeButtons()}</div><div class="actions" style="justify-content:center"><a class="btn" href="${href('/')}">TOPへ</a></div><noscript><p class="hint">チャレンジには JavaScript がいります。</p></noscript></div></div>`,
     extraHead: '<meta name="robots" content="noindex">' }));
+  // サッカーのことば（用語の一覧）
+  write('words/index.html', wordsPage()); add('/words/', '0.4');
   // 404
   write('404.html', layout({ title: 'ページが見つかりません', description: 'ページが見つかりません', pathname: '/404.html',
     body: `<div class="card"><h1 class="qtitle">ページが見つかりません</h1><p>そのページはありません。<a href="${href('/')}">TOP</a> から問題をえらんでください。</p></div>`,
@@ -579,9 +648,9 @@ async function main() {
       write(`og/q-${qid(q.id)}.png`, toPng(svg));
     }
     const q1 = QUESTIONS[0];
-    write('og/default.png', toPng(ogSvg({ scene: q1.scene, overlay: null, title: config.TAGLINE, sub: `小学生向け・全${QUESTIONS.length}問・無料`, id: 'ogd' })));
+    write('og/default.png', toPng(ogSvg({ scene: q1.scene, overlay: null, title: config.TAGLINE, sub: `小学生向け・全${QUESTIONS.length}問`, id: 'ogd' })));
   }
 
-  console.log(`dist/ に ${QUESTIONS.length} 問 + カテゴリ ${ALL_CATS.length - 1} ページ + 固定ページを生成（${Date.now() - t0}ms）`);
+  console.log(`dist/ に ${QUESTIONS.length} 問 + カテゴリ ${ALL_CATS.length - 1} ページ + 固定ページを生成（${Date.now() - t0}ms）`); // kanji-ok
 }
 main().catch((e) => { console.error(e); process.exit(1); });

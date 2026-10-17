@@ -10,7 +10,7 @@
   var CFG=window.PD_CONFIG||{};
   var CH=CFG.challenge||{count:10,timeLimit:{},bands:[0,4,7,10],rankTable:{},msg:'つぎは{next}をねらおう！',msgTop:'パーフェクト！'};
   var RANKS=CFG.ranks||[];
-  var LVN=CFG.levelNames||{1:'初級',2:'中級',3:'上級'};
+  var LVN=CFG.levelNames||{1:'入門',2:'中級',3:'上級'};
   var KEYS=['ア','イ','ウ','エ','オ'];
   var BASE=CFG.base||'';
   var MARK={ok:'◎',partial:'○',ng:'×'};
@@ -84,7 +84,7 @@
       var b=best[el.getAttribute('data-best')];
       if(!b) return;
       var r=RANKS[b.rank]||{emoji:'',name:''};
-      el.textContent='最高記録: '+r.emoji+' '+r.name+' '+fmtScore(b.score)+'点 '+mmss(b.time);
+      el.textContent='ベストきろく: '+r.emoji+' '+r.name+' '+fmtScore(b.score)+'点 '+mmss(b.time);
       el.hidden=false;
     });
   }
@@ -224,8 +224,8 @@
       var cls,icon,msg,sub;
       var ck=correct.map(function(i){return KEYS[i];}).join('・');
       if(hit===correct.length&&miss===0){cls='ok';icon='◎';msg='せいかい！';sub='全部あてた！';}
-      else if(hit>0){cls='partial';icon='○';msg='おしい！';sub='正解は '+ck+'。あたりは '+hit+' 個'+(miss?('、ちがうのが '+miss+' 個'):'')+'。';}
-      else{cls='ng';icon='×';msg='ざんねん…';sub='正解は '+ck+'。もう一回考えてみよう。';}
+      else if(hit>0){cls='partial';icon='○';msg='おしい！';sub='せいかいは '+ck+'。あたりは '+hit+' つ'+(miss?('、ちがうのが '+miss+' つ'):'')+'。';}
+      else{cls='ng';icon='×';msg='ざんねん…';sub='せいかいは '+ck+'。もう一回考えてみよう。';}
       if(cls==='ok'||!solved[id]){ solved[id]=cls==='ok'?'ok':'tried'; lsSet('pd-solved',solved); }
       // チャレンジの採点とタイムを記録
       if(ch){
@@ -275,8 +275,8 @@
     var isNew=!prev||total>prev.score||(total===prev.score&&time<prev.time);
     if(isNew){ best[level]={score:total,time:Math.round(time),rank:r.idx,ts:new Date().toISOString()}; lsSet('pd-best',best); }
     var timeLine = r.limit
-      ? (r.over ? '<p class="chtime over">⏱ タイム '+mmss(time)+' ／ 目標 '+mmss(r.limit)+'<br><b>目標タイムオーバーでランク1つダウン</b></p>'
-                : '<p class="chtime ok">⏱ タイム '+mmss(time)+' ／ 目標 '+mmss(r.limit)+'　<b>クリア！</b></p>')
+      ? (r.over ? '<p class="chtime over">⏱ タイム '+mmss(time)+' ／ もくひょう '+mmss(r.limit)+'<br><b>もくひょうタイムをすぎたので、ランク1つダウン</b></p>'
+                : '<p class="chtime ok">⏱ タイム '+mmss(time)+' ／ もくひょう '+mmss(r.limit)+'　<b>クリア！</b></p>')
       : '<p class="chtime">⏱ タイム '+mmss(time)+'</p>';
     var pr=prev?RANKS[prev.rank]||{name:''}:null;
     el.innerHTML=
@@ -286,7 +286,7 @@
         timeLine+
         '<div class="chrank"><span class="chemoji">'+esc(r.emoji)+'</span><span class="chname">'+esc(r.name)+'</span></div>'+
         '<p class="chmsg">'+esc(r.msg)+'</p>'+
-        (isNew?'<p class="chnew">🎉 '+esc(LVN[level])+'の最高記録！</p>':'<p class="hint">'+esc(LVN[level])+'の最高記録: '+esc(pr.name)+' '+fmtScore(prev.score)+'点 '+mmss(prev.time)+'</p>')+
+        (isNew?'<p class="chnew">🎉 '+esc(LVN[level])+'のベストきろく！</p>':'<p class="hint">'+esc(LVN[level])+'のベストきろく: '+esc(pr.name)+' '+fmtScore(prev.score)+'点 '+mmss(prev.time)+'</p>')+
       '</div>'+
       '<div class="card">'+
         '<p class="hint" style="margin-bottom:10px">◎=1点、○=0.5点、×=0点。タップすると、その問題をもう一度見られる。</p>'+
@@ -294,12 +294,40 @@
           return '<a class="item" href="'+qurl(x.id)+'"><span class="n"><span class="mk '+x.cls+'">'+MARK[x.cls]+'</span><br>'+(i+1)+'</span><span class="t">'+esc(x.title)+'<small>Q'+esc(x.id)+'・'+fmtScore(x.score)+'点・'+mmss(x.time||0)+'</small></span></a>';
         }).join('')+'</div>'+
       '</div>'+
-      '<div class="actions"><button class="primary big" type="button" data-start-challenge="'+level+'">もう一度</button><button type="button" id="btnOtherLevel">べつのレベルに挑戦</button><a class="btn" href="'+BASE+'/">TOPへ</a></div>';
+      '<div class="actions"><button class="primary big" type="button" data-start-challenge="'+level+'">もう一度</button><button type="button" id="btnOtherLevel">べつのレベルをやる</button><a class="btn" href="'+BASE+'/">TOPへ</a></div>';
     bindStartButtons(el);
     document.getElementById('btnOtherLevel').addEventListener('click',function(){ ssSet('pd-ch',null); location.href=BASE+'/challenge/'; });
   }
 
+  /* ===== サッカー用語（点線の下線）: タップで説明を出す ===== */
+  function initTerms(){
+    var open=null;   // いま出ている説明 {el, pop}
+    function close(){ if(open){ open.el.classList.remove('open'); open.el.setAttribute('aria-expanded','false'); if(open.pop.parentNode) open.pop.parentNode.removeChild(open.pop); open=null; } }
+    function toggle(el){
+      if(open&&open.el===el){ close(); return; }
+      close();
+      var pop=document.createElement('span');
+      pop.className='termpop'; pop.setAttribute('role','note');
+      pop.textContent=(el.getAttribute('data-term')||'')+'：'+(el.getAttribute('data-d')||'');
+      el.insertAdjacentElement('afterend',pop);
+      el.classList.add('open'); el.setAttribute('aria-expanded','true');
+      open={el:el,pop:pop};
+    }
+    document.addEventListener('click',function(ev){
+      var t=ev.target.closest&&ev.target.closest('.term');
+      if(t){ ev.preventDefault(); toggle(t); return; }
+      if(open&&!(ev.target.closest&&ev.target.closest('.termpop'))) close();
+    });
+    document.addEventListener('keydown',function(ev){
+      var t=ev.target.closest&&ev.target.closest('.term');
+      if(t&&(ev.key==='Enter'||ev.key===' ')){ ev.preventDefault(); toggle(t); }
+      else if(ev.key==='Escape') close();
+    });
+    document.querySelectorAll('.term').forEach(function(el){ el.setAttribute('aria-expanded','false'); });
+  }
+
   initGate();
+  initTerms();
   var qroot=document.querySelector('[data-qid]');
   var chPage=document.querySelector('[data-page="challenge"]');
   if(qroot) initQuestion(qroot);
