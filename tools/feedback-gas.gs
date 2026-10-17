@@ -2,6 +2,7 @@
  * ポジショニングドリル 受け口（Google Apps Script）
  *   - 👍👎 フィードバックの記録（doPost, type:'feedback' → シート 'feedback'）
  *   - チャレンジ結果の記録（doPost, type:'result' → シート 'results'）
+ *   - 1問ごとの答えログ（doPost, type:'answer' → シート 'answers'。問題を直すためのデータ。doGet では返さない）
  *   - 名前ごとのレベル別ベスト（doGet ?name=... → JSON）
  *
  * 使い方（README「フィードバック・結果の受け口」も参照）
@@ -15,10 +16,16 @@
  * 5. コードを直したら「デプロイ」→「デプロイを管理」→ 鉛筆 → バージョン「新バージョン」→ デプロイ（URL は変わらない）
  *
  * ---- doPost（サイト側は fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'}, body: JSON文字列 })）----
- *   type:'feedback' { type, name, qid, vote:'good'|'bad', comment, level, phase, pos, ua, ts }   → 'feedback' シート
+ *   type:'feedback' { type, name, qid, vote:'good'|'bad', comment, reasons:[👎の理由チップの文字列], level, phase, pos, ua, ts }
+ *                                                                                                  → 'feedback' シート
  *   type:'result'   { type, name, level:1|2|3, score, timeSec, rank(ランク名), rankIdx, cleared(目標タイム内なら true),
  *                     qids:[出た10問のID], marks:'◎○×…'(10文字), ts }                            → 'results' シート
+ *   type:'answer'   { type, name, qid, level, phase, pos, picked:[押した選択肢の添字 0〜4], correct:[正解の添字],
+ *                     result:'ok'|'partial'|'ng', timeSec(問題表示→答え合わせ), attempt(同じ問題で何回目か),
+ *                     mode:'challenge'|'practice', ts }                                            → 'answers' シート
  *   type が無いものは feedback として扱う（古いサイトからの送信）。返事: {ok:true} / {ok:false,error}
+ *   feedback は同じ name+qid の行が複数来ることがある（👎 のあとに理由チップを足すと送り直す）→ いちばん下の行が最新
+ *   ヘッダーは足りない列（例: 古い feedback シートの 'reasons'）を末尾に書き足すだけで、既存の列は動かさない
  *
  * ---- doGet（サイト側は fetch(url + '?name=' + encodeURIComponent(name)) → JSON）----
  *   その name の 'results' からレベル別のベスト（score が最大、同点なら timeSec が短い）を返す:
@@ -29,8 +36,9 @@
 var SPREADSHEET_ID = '1UuAX2vNxlX5qw1t5MUyPKB52Tl9fp59Z5gY7KJXVsN0';
 
 var SHEETS = {
-  feedback: { name: 'feedback', header: ['受信日時', 'ts(端末)', 'name', 'qid', 'vote', 'comment', 'level', 'phase', 'pos', 'ua'] },
+  feedback: { name: 'feedback', header: ['受信日時', 'ts(端末)', 'name', 'qid', 'vote', 'comment', 'level', 'phase', 'pos', 'ua', 'reasons'] },
   result:   { name: 'results',  header: ['受信日時', 'ts(端末)', 'name', 'level', 'score', 'timeSec', 'rank', 'rankIdx', 'cleared', 'qids', 'marks'] },
+  answer:   { name: 'answers',  header: ['受信日時', 'ts(端末)', 'name', 'qid', 'level', 'phase', 'pos', 'picked', 'correct', 'result', 'timeSec', 'attempt', 'mode'] },
 };
 
 function getSpreadsheet_() {
@@ -44,9 +52,15 @@ function getSheet_(type) {
     sh.appendRow(def.header);
     sh.getRange(1, 1, 1, def.header.length).setFontWeight('bold');
     sh.setFrozenRows(1);
+  } else if (sh.getLastColumn() < def.header.length) {
+    // 列が増えたとき（例: feedback の 'reasons'）: 既存の列はそのまま、足りないヘッダーだけ末尾に書き足す
+    var from = sh.getLastColumn();
+    var add = def.header.slice(from);
+    sh.getRange(1, from + 1, 1, add.length).setValues([add]).setFontWeight('bold');
   }
   return sh;
 }
+function joinList_(v, max) { return (Array.isArray(v) ? v.map(String) : [String(v || '')]).filter(Boolean).join(',').slice(0, max || 200); }
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
@@ -58,9 +72,15 @@ function doPost(e) {
   try {
     var body = (e && e.postData && e.postData.contents) || '{}';
     var d = JSON.parse(body);
-    var type = d.type === 'result' ? 'result' : 'feedback';
+    var type = d.type === 'result' ? 'result' : d.type === 'answer' ? 'answer' : 'feedback';
     var sh = getSheet_(type);
-    if (type === 'result') {
+    if (type === 'answer') {
+      sh.appendRow([
+        new Date(), d.ts || '', cleanName_(d.name), Number(d.qid) || '', Number(d.level) || '', String(d.phase || '').slice(0, 30), String(d.pos || '').slice(0, 30),
+        joinList_(d.picked, 20), joinList_(d.correct, 20), String(d.result || '').slice(0, 10), Number(d.timeSec) || 0, Number(d.attempt) || 0,
+        String(d.mode || '').slice(0, 10)
+      ]);
+    } else if (type === 'result') {
       sh.appendRow([
         new Date(), d.ts || '', cleanName_(d.name), Number(d.level) || '', Number(d.score) || 0, Number(d.timeSec) || 0,
         String(d.rank || '').slice(0, 30), Number(d.rankIdx) || 0, d.cleared ? true : false,
@@ -69,7 +89,7 @@ function doPost(e) {
     } else {
       sh.appendRow([
         new Date(), d.ts || '', cleanName_(d.name), d.qid || '', d.vote || '', String(d.comment || '').slice(0, 200),
-        d.level || '', d.phase || '', d.pos || '', String(d.ua || '').slice(0, 300)
+        d.level || '', d.phase || '', d.pos || '', String(d.ua || '').slice(0, 300), joinList_(d.reasons, 200)
       ]);
     }
     return json_({ ok: true });

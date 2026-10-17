@@ -35,6 +35,7 @@
        'pd:<name>:best'       レベル別ベスト {level:{score,time,rank,ts}}
        'pd:<name>:solved'     解いた印 {qid:'ok'|'tried'}
        'pd:<name>:fb'         👍👎 の送信済み {qid:payload}
+       'pd:<name>:tries'      答え合わせをした回数 {qid:n}（答えログの attempt）
      名前なし時代の 'pd-best' / 'pd-solved' / 'pd-fb' は、この端末で最初に登録した名前に引きつぐ（それ以外は読まない） */
   var NAME=(function(){ try{ return localStorage.getItem('pd-name')||''; }catch(e){ return ''; } })();
   function nk(s){ return 'pd:'+NAME+':'+s; }
@@ -210,29 +211,57 @@
     mergeRemoteBest();   // スプレッドシートに大きい記録があれば差し替え
   }
 
-  /* ===== 👍👎 フィードバック（押すまで次へ進めない） ===== */
+  /* ===== 👍👎 フィードバック（押すまで次へ進めない） =====
+     👎 のときだけ「理由チップ」（タップで複数えらべる。えらばなくても進める）を出す。
+     送信は 2 秒待ってまとめて行う（チップやひとことを足したら同じ内容を送り直す。ページを出るときは待たずに送る）ので、
+     シートには同じ name+qid の行が複数できることがある → いちばん下（最新）の行を見る */
   function initFeedback(root,id,onVoted){
     var box=document.getElementById('feedback'); if(!box) return false;
     var all=lsGet(nk('fb'),{});
     var done=document.getElementById('fbDone'), input=document.getElementById('fbComment');
+    var reasonsBox=document.getElementById('fbReasons');
+    var chips=reasonsBox?reasonsBox.querySelectorAll('.fbr'):[];
     var btns=box.querySelectorAll('.fbv');
-    function showDone(vote){
-      btns.forEach(function(b){ b.classList.toggle('on',b.getAttribute('data-vote')===vote); });
-      done.hidden=false;
+    var timer=null, dirty=false;
+    function pickedReasons(){ var r=[]; chips.forEach(function(c){ if(c.getAttribute('aria-pressed')==='true') r.push(c.getAttribute('data-reason')); }); return r; }
+    function flush(){ if(timer){ clearTimeout(timer); timer=null; } if(!dirty||!all[id]) return; dirty=false; post(all[id]); }
+    function schedule(){ dirty=true; if(timer) clearTimeout(timer); timer=setTimeout(flush,2000); }
+    function render(){
+      var cur=all[id];
+      btns.forEach(function(b){ b.classList.toggle('on',!!cur&&b.getAttribute('data-vote')===cur.vote); });
+      if(reasonsBox) reasonsBox.hidden=!(cur&&cur.vote==='bad');
+      done.hidden=!cur;
     }
-    if(all[id]) showDone(all[id].vote);
+    function save(vote){
+      all[id]={type:'feedback',name:NAME,qid:Number(id),vote:vote,comment:(input.value||'').trim().slice(0,100),
+        reasons:vote==='bad'?pickedReasons():[],
+        level:Number(root.getAttribute('data-level')),phase:root.getAttribute('data-phase'),pos:root.getAttribute('data-pos'),
+        ua:navigator.userAgent,ts:new Date().toISOString()};
+      lsSet(nk('fb'),all);   // 1問につき1件（送り直しは上書き）
+      schedule();
+    }
+    if(all[id]){
+      (all[id].reasons||[]).forEach(function(r){ chips.forEach(function(c){ if(c.getAttribute('data-reason')===r) c.setAttribute('aria-pressed','true'); }); });
+      render();
+    }
     btns.forEach(function(b){
       b.addEventListener('click',function(){
-        var payload={type:'feedback',name:NAME,qid:Number(id),vote:b.getAttribute('data-vote'),comment:(input.value||'').trim().slice(0,100),
-          level:Number(root.getAttribute('data-level')),phase:root.getAttribute('data-phase'),pos:root.getAttribute('data-pos'),
-          ua:navigator.userAgent,ts:new Date().toISOString()};
-        all[id]=payload; lsSet(nk('fb'),all);   // 1問につき1件（送り直しは上書き）
-        post(payload);
-        showDone(payload.vote);
+        var vote=b.getAttribute('data-vote');
+        save(vote); render();
         onVoted();
-        if(window.gtag){ try{ gtag('event','feedback',{question_id:id,vote:payload.vote}); }catch(e){} }
+        if(window.gtag){ try{ gtag('event','feedback',{question_id:id,vote:vote}); }catch(e){} }
       });
     });
+    chips.forEach(function(c){
+      c.addEventListener('click',function(){
+        c.setAttribute('aria-pressed',c.getAttribute('aria-pressed')==='true'?'false':'true');
+        if(all[id]) save(all[id].vote);
+      });
+    });
+    input.addEventListener('input',function(){ if(all[id]) save(all[id].vote); });   // 👍👎 のあとに書いたひとことも送る
+    window.addEventListener('pagehide',flush);
+    document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='hidden') flush(); });
+    document.querySelectorAll('#aview a[data-next]').forEach(function(a){ a.addEventListener('click',flush,true); });
     return !!all[id];   // すでに送ってあるか
   }
 
@@ -246,7 +275,8 @@
     var choices=root.querySelectorAll('.choice');
     var nextLinks=[].slice.call(document.querySelectorAll('#aview a[data-next]'));
     var skipLinks=document.querySelectorAll('a[data-skip]');
-    var startedAt=Date.now();   // 問題を見はじめた時刻（タイム計測）
+    var startedAt=Date.now();   // 問題を見はじめた時刻（チャレンジのタイム計測）
+    var shownAt=startedAt;      // 問題を表示した時刻（答えログの timeSec。「もう一回」で戻ったら取り直す）
     var timerId=null;
 
     // チャレンジ中？
@@ -309,6 +339,11 @@
       else if(hit>0){cls='partial';icon='○';msg='おしい！';sub='せいかいは '+ck+'。あたりは '+hit+' つ'+(miss?('、ちがうのが '+miss+' つ'):'')+'。';}
       else{cls='ng';icon='×';msg='ざんねん…';sub='せいかいは '+ck+'。もう一回考えてみよう。';}
       if(cls==='ok'||!solved[id]){ solved[id]=cls==='ok'?'ok':'tried'; lsSet(nk('solved'),solved); }
+      // 1問ごとの答えログ（問題を直すためのデータ）。attempt はこの名前でこの問題に答えた回数（「もう一回」も数える）
+      var tries=lsGet(nk('tries'),{}); tries[id]=(Number(tries[id])||0)+1; lsSet(nk('tries'),tries);
+      post({type:'answer',name:NAME,qid:Number(id),level:Number(root.getAttribute('data-level')),phase:root.getAttribute('data-phase'),pos:root.getAttribute('data-pos'),
+        picked:picked.slice(),correct:correct,result:cls,timeSec:Math.round((Date.now()-shownAt)/100)/10,attempt:tries[id],
+        mode:ch?'challenge':'practice',ts:new Date().toISOString()});
       // チャレンジの採点とタイムを記録
       if(ch){
         var cur=ssGet('pd-ch');
@@ -331,6 +366,7 @@
     if(retry) retry.addEventListener('click',function(){
       picked=[]; choices.forEach(function(c){ c.setAttribute('aria-checked','false'); });
       btnAnswer.disabled=true; aview.hidden=true; qview.hidden=false; window.scrollTo({top:0});
+      shownAt=Date.now();
     });
     // チャレンジ中の「もう一回」は採点をやり直さない（最初の答えで決まる）ので隠す
     if(ch&&retry) retry.hidden=true;

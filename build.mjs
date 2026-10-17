@@ -316,6 +316,13 @@ function feedbackMarkup() {
   return `<div class="fb card" id="feedback">
       <p class="fbq">かいせつは、わかりやすかった？</p>
       <p class="fbneed" id="fbNeed">👍 か 👎 をおすと、つぎに進めるよ。</p>
+      <div class="fbreasons" id="fbReasons" hidden>
+        <p class="fbrq">どこがわかりにくかった？ あてはまるのをタップ（いくつでも。なくてもOK）</p>
+        <div class="fbrchips">
+          ${['ことばがわからない', '図のどこか分からない', '答えがちがうと思う', 'かんたんすぎ', 'ほかの理由（ひとことに書く）']
+            .map((r) => `<button class="fbr" type="button" aria-pressed="false" data-reason="${esc(r)}">${esc(r)}</button>`).join('\n          ')}
+        </div>
+      </div>
       <input class="fbc" id="fbComment" type="text" maxlength="100" placeholder="どこがわかりにくかった？（なくてもOK）" aria-label="ひとこと">
       <div class="fbbtns">
         <button class="fbv" type="button" data-vote="good">👍 わかりやすい</button>

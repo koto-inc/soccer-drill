@@ -180,6 +180,12 @@ button.big,.btn.big{font-size:18px;padding:14px 22px;border-radius:14px}
 .fbv{flex:1;min-width:140px;font-size:17px}
 .fbv.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .fbdone{margin:0;color:var(--ok);font-weight:800;font-size:17px}
+/* 👎 のときだけ出る理由チップ（.fbv を小さく丸くしたもの。選択中は accent 色） */
+.fbreasons{display:grid;gap:6px}
+.fbrq{margin:0;font-size:13px;font-weight:800;color:var(--muted)}
+.fbrchips{display:flex;flex-wrap:wrap;gap:6px}
+.fbr{font-size:14px;padding:6px 12px;border-radius:999px;line-height:1.4;flex:none}
+.fbr[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
 
 /* ===== 10問チャレンジ ===== */
 .challenge{text-align:center}
