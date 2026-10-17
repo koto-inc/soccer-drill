@@ -32,7 +32,7 @@ export default {
 
   // ===== チーム内限定公開フェーズ用（公開するときは TEAM_PASSCODE を '' に、NOINDEX を false にする） =====
   // 合言葉（空なら無効）。小学生が入力するので、ひらがなや数字の短いものに。大文字小文字・全角半角は区別しない。
-  TEAM_PASSCODE: 'koto',
+  TEAM_PASSCODE: 'JJC',
   // true なら全ページに noindex,nofollow を付け、robots.txt でクロールを止める（検索に載らない）
   NOINDEX: true,
 
