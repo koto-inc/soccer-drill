@@ -5,7 +5,7 @@
  *   - 名前ごとのレベル別ベスト（doGet ?name=... → JSON）
  *
  * 使い方（README「フィードバック・結果の受け口」も参照）
- * 1. Google スプレッドシートを新規作成（名前は何でもよい。例「ポジショニングドリル 記録」）
+ * 1. 保存先のスプレッドシートを開く（SPREADSHEET_ID のシート。別のシートにしたいときは ID を書きかえる）
  * 2. メニュー「拡張機能」→「Apps Script」を開き、Code.gs の中身をこのファイルの内容で置きかえて保存
  * 3. 右上「デプロイ」→「新しいデプロイ」→ 種類「ウェブアプリ」
  *      説明: feedback / 次のユーザーとして実行: 自分 / アクセスできるユーザー: 全員
@@ -25,14 +25,20 @@
  *     { "1": { "score": 8.5, "time": 272, "rank": "Jリーグ級", "cleared": true, "ts": "2026-10-18T…" }, "2": {…}, "3": {…} }
  *   記録が無いレベルは入らない。name が空なら {}。名前の一覧や他の人の記録は返さない。
  */
+// 保存先のスプレッドシート（URL の /d/ と /edit の間の ID）。空ならこのスクリプトが貼られているシートに保存する
+var SPREADSHEET_ID = '1UuAX2vNxlX5qw1t5MUyPKB52Tl9fp59Z5gY7KJXVsN0';
+
 var SHEETS = {
   feedback: { name: 'feedback', header: ['受信日時', 'ts(端末)', 'name', 'qid', 'vote', 'comment', 'level', 'phase', 'pos', 'ua'] },
   result:   { name: 'results',  header: ['受信日時', 'ts(端末)', 'name', 'level', 'score', 'timeSec', 'rank', 'rankIdx', 'cleared', 'qids', 'marks'] },
 };
 
+function getSpreadsheet_() {
+  return SPREADSHEET_ID ? SpreadsheetApp.openById(SPREADSHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
+}
 function getSheet_(type) {
   var def = SHEETS[type] || SHEETS.feedback;
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet_();
   var sh = ss.getSheetByName(def.name) || ss.insertSheet(def.name);
   if (sh.getLastRow() === 0) {
     sh.appendRow(def.header);
@@ -78,7 +84,7 @@ function doPost(e) {
 function doGet(e) {
   var name = cleanName_(e && e.parameter && e.parameter.name);
   if (!name) return json_({});
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet_();
   var sh = ss.getSheetByName(SHEETS.result.name);
   if (!sh || sh.getLastRow() < 2) return json_({});
   var header = SHEETS.result.header;
