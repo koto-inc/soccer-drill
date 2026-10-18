@@ -8,7 +8,7 @@
 (function(){
   'use strict';
   var CFG=window.PD_CONFIG||{};
-  var CH=CFG.challenge||{count:10,timeLimit:{},bands:[0,4,7,10],rankTable:{},msg:'つぎは{next}をねらおう！',msgTop:'パーフェクト！'};
+  var CH=CFG.challenge||{count:7,timeLimit:{},bands:[0,3,5,7],rankTable:{},msg:'つぎは{next}をねらおう！',msgTop:'パーフェクト！'};
   var RANKS=CFG.ranks||[];
   var LVN=CFG.levelNames||{1:'入門',2:'中級',3:'上級'};
   var KEYS=['ア','イ','ウ','エ','オ'];
@@ -138,7 +138,7 @@
         var rows=(data&&data[ol.getAttribute('data-ranking')])||[];
         if(!rows.length){ ol.innerHTML='<li class="hint">まだだれもいないよ。1番のりをねらおう！</li>'; return; }
         ol.innerHTML=rows.map(function(x,i){
-          var r=RANKS[x.rankIdx]||{emoji:''};
+          var r=rankOf(Number(ol.getAttribute('data-ranking')),Number(x.score)||0,Number(x.time)||0);   // ランクは今の配点で計算し直す
           var cls=(x.name===NAME?' me':'')+(i===0?' top1':'');
           return '<li class="'+cls.trim()+'"><span class="no">'+(i+1)+'</span><span class="nm">'+esc(x.name)+'</span><span class="sc">'+esc(r.emoji)+' '+fmtScore(x.score)+'点 '+mmss(x.time)+'</span></li>';
         }).join('');
@@ -168,19 +168,30 @@
     return {idx:idx,emoji:r.emoji,name:r.name,msg:msg,over:over,limit:limit};
   }
 
-  /* ===== レベル別チャレンジ（進行は sessionStorage 'pd-ch'） ===== */
+  /* ===== レベル別チャレンジ（進行は sessionStorage 'pd-ch'） =====
+     1回の中で同じ問題は出ない（shuffle して count 問を切り出す）。さらに、同じなまえでは前のチャレンジで出た問題を
+     なるべく出さない（'pd:<name>:chseen' {level:[出した id]}。そのレベルの問題を出し切ったら最初から） */
   function startChallenge(level){
     var pool=(CFG.levels&&CFG.levels[level])||[];
+    var n=CH.count||7;
     if(!pool.length) return;
-    var ids=shuffle(pool.map(String)).slice(0,CH.count||10);
+    var seenAll=lsGet(nk('chseen'),{}); var seen=(seenAll[level]||[]).map(String);
+    var fresh=pool.map(String).filter(function(id){ return seen.indexOf(id)<0; });
+    var ids;
+    if(fresh.length>=n){ ids=shuffle(fresh).slice(0,n); }
+    else{ ids=shuffle(fresh).concat(shuffle(pool.map(String).filter(function(id){ return fresh.indexOf(id)<0; }))).slice(0,n); seen=[]; }   // 出し切ったらリセット
+    seenAll[level]=seen.concat(ids).slice(-pool.length); lsSet(nk('chseen'),seenAll);
     ssSet('pd-ch',{level:level,ids:ids,results:[]});
     ssSet('pd-order',null);
     location.href=qurl(ids[0]);
   }
   function activeChallenge(){
     var ch=ssGet('pd-ch');
+    if(ch&&ch.ids&&ch.ids.length!==(CH.count||7)){ ssSet('pd-ch',null); return null; }   // 問題数を変える前の途中データは捨てる
     return (ch&&ch.ids&&ch.results.length<ch.ids.length)?ch:null;
   }
+  // 問題数を変える前（10問）の端末内ベストは点のスケールがちがうので捨てる（正しい値は GAS が最初の count 問から計算し直して返す）
+  (function(){ var b=lsGet(nk('best'),null); if(!b) return; var changed=false; Object.keys(b).forEach(function(lv){ if(b[lv]&&b[lv].score>(CH.count||7)){ delete b[lv]; changed=true; } }); if(changed) lsSet(nk('best'),b); })();
   function bindStartButtons(root){
     (root||document).querySelectorAll('[data-start-challenge]').forEach(function(el){
       el.addEventListener('click',function(ev){ ev.preventDefault(); startChallenge(Number(el.getAttribute('data-start-challenge'))); });
@@ -413,6 +424,7 @@
   /* ===== チャレンジ 結果ページ ===== */
   function initChallengePage(el){
     var ch=ssGet('pd-ch');
+    if(ch&&ch.ids&&ch.ids.length!==(CH.count||7)){ ssSet('pd-ch',null); ch=null; }
     initWho(); bindStartButtons(el); showBest(el); mergeRemoteBest(el);
     if(!ch||!ch.ids||ch.results.length<ch.ids.length){
       // まだ終わっていない：途中なら「つづきから」を出す

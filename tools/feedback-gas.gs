@@ -19,7 +19,7 @@
  *   type:'feedback' { type, name, qid, vote:'good'|'bad', comment, reasons:[👎の理由チップの文字列], level, phase, pos, ua, ts }
  *                                                                                                  → 'feedback' シート
  *   type:'result'   { type, name, level:1|2|3, score, timeSec, rank(ランク名), rankIdx, cleared(目標タイム内なら true),
- *                     qids:[出た10問のID], marks:'◎○×…'(10文字), ts }                            → 'results' シート
+ *                     qids:[出た問題のID], marks:'◎○×…'(問題数ぶんの文字), ts }                   → 'results' シート
  *   type:'answer'   { type, name, qid, level, phase, pos, picked:[押した選択肢の添字 0〜4], correct:[正解の添字],
  *                     result:'ok'|'partial'|'ng', timeSec(問題表示→答え合わせ), attempt(同じ問題で何回目か),
  *                     mode:'challenge'|'practice', ts }                                            → 'answers' シート
@@ -47,6 +47,9 @@ var SHEETS = {
 };
 var RANKING_TOP = 10;   // ランキングに出す人数（レベルごと）
 var RANKING_CACHE_SEC = 60;
+// 1回のチャレンジの問題数（site.config.mjs の CHALLENGE.count と同じにする）。
+// これより多い問題数で記録された行（10問時代）は、marks の最初の CHALLENGE_COUNT 問だけで点を計算し直し、タイムは問題数の比で縮める
+var CHALLENGE_COUNT = 7;
 
 function getSpreadsheet_() {
   return SPREADSHEET_ID ? SpreadsheetApp.openById(SPREADSHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
@@ -72,6 +75,31 @@ function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 function cleanName_(s) { return String(s || '').replace(/\s+/g, ' ').trim().slice(0, 12); }
+function scoreOfMarks_(marks) { var s = 0; for (var i = 0; i < marks.length; i++) { if (marks[i] === '◎') s += 1; else if (marks[i] === '○') s += 0.5; } return s; }
+// 問題数を変える前の記録を、今の問題数に合わせる。marks（◎○×の列）があれば最初の CHALLENGE_COUNT 問で計算し直し、
+// 無ければ点とタイムを問題数の比で縮める（点は 0.5 きざみに切り捨て）
+function adjust_(score, time, marks) {
+  marks = String(marks || '');
+  if (marks.length > CHALLENGE_COUNT) {
+    return { score: scoreOfMarks_(marks.slice(0, CHALLENGE_COUNT)), time: Math.round(time * CHALLENGE_COUNT / marks.length) };
+  }
+  if (!marks && score > CHALLENGE_COUNT) {
+    var oldCount = 10;
+    return { score: Math.floor(score * CHALLENGE_COUNT / oldCount * 2) / 2, time: Math.round(time * CHALLENGE_COUNT / oldCount) };
+  }
+  return { score: score, time: time };
+}
+// results シートから「name+level+score+timeSec が同じ行」の marks を引く（ranking シートには marks が無いので）
+function marksIndex_() {
+  var idx = {};
+  var sh = getSpreadsheet_().getSheetByName(SHEETS.result.name);
+  if (!sh || sh.getLastRow() < 2) return idx;
+  var h = SHEETS.result.header, c = function (k) { return h.indexOf(k); };
+  sh.getRange(2, 1, sh.getLastRow() - 1, h.length).getValues().forEach(function (r) {
+    idx[[cleanName_(r[c('name')]), Number(r[c('level')]), Number(r[c('score')]) || 0, Number(r[c('timeSec')]) || 0].join('|')] = String(r[c('marks')] || '');
+  });
+  return idx;
+}
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
@@ -131,7 +159,8 @@ function doGet(e) {
   rows.forEach(function (r) {
     if (cleanName_(r[col('name')]) !== name) return;
     var level = Number(r[col('level')]); if (!level) return;
-    var score = Number(r[col('score')]) || 0, time = Number(r[col('timeSec')]) || 0;
+    var a = adjust_(Number(r[col('score')]) || 0, Number(r[col('timeSec')]) || 0, r[col('marks')]);
+    var score = a.score, time = a.time;
     var cur = best[level];
     if (!cur || score > cur.score || (score === cur.score && time < cur.time)) {
       var ts = r[col('ts(端末)')];
@@ -153,11 +182,17 @@ function ranking_() {
     var header = SHEETS.rank.header;
     var col = function (k) { return header.indexOf(k); };
     var rows = sh.getRange(2, 1, sh.getLastRow() - 1, header.length).getValues();
+    var midx = null;   // 10問時代の行の marks を results から引くための索引（必要になったときだけ作る）
     var best = {};   // level -> name -> record
     rows.forEach(function (r) {
       var name = cleanName_(r[col('name')]), level = Number(r[col('level')]);
       if (!name || !out[level]) return;
       var score = Number(r[col('score')]) || 0, time = Number(r[col('timeSec')]) || 0;
+      if (score > CHALLENGE_COUNT) {   // 問題数を変える前の記録 → 最初の CHALLENGE_COUNT 問で計算し直す
+        if (!midx) midx = marksIndex_();
+        var a = adjust_(score, time, midx[[name, level, score, time].join('|')] || '');
+        score = a.score; time = a.time;
+      }
       best[level] = best[level] || {};
       var cur = best[level][name];
       if (!cur || score > cur.score || (score === cur.score && time < cur.time)) {

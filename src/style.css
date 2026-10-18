@@ -236,7 +236,8 @@ button.big,.btn.big{font-size:18px;padding:14px 22px;border-radius:14px}
 .chreg .hint{margin:0}
 
 /* ===== レベル別チャレンジ / 👍👎 必須 ===== */
-.chbtns{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+.chbtns{display:grid;gap:10px;grid-template-columns:1fr}   /* スマホは縦1列（入門→中級→上級の順がくずれないように） */
+@media (min-width:600px){ .chbtns{grid-template-columns:repeat(3,1fr)} }
 .chbtn .btn.big{display:block;width:100%;text-align:center}
 .chbtn .best{font-size:12px;margin-top:6px;line-height:1.4}
 .chcont{text-align:center;margin:0 0 12px}
