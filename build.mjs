@@ -514,25 +514,27 @@ function indexPage() {
   const body = `
 ${challengeTopMarkup()}
 ${rankingMarkup()}
-<h2 class="cath" style="margin-top:6px">練習する</h2>
-<p class="intro">カテゴリをえらぼう。えらんだカテゴリの問題が、1問ずつランダムに出てくる（点数やタイムはなし。すきなだけできる）。<span class="hint">（全 ${QUESTIONS.length} 問・せいかい <span id="doneAll">0</span> 問）</span></p>
+<details class="card fold" id="practice" data-fold="practice">
+  <summary><h2 class="cath">練習する</h2><small>カテゴリをえらんで、1問ずつ</small></summary>
+  <p class="intro">カテゴリをえらぼう。えらんだカテゴリの問題が、1問ずつランダムに出てくる（点数やタイムはなし。すきなだけできる）。<span class="hint">（全 ${QUESTIONS.length} 問・せいかい <span id="doneAll">0</span> 問）</span></p>
 ${CATS.map((g) => `
-<section class="catgroup">
-  ${g.group ? `<h2 class="cath">${esc(g.group)}</h2>` : ''}
-  <div class="catrow">
-    ${g.items.map((c) => catButton(c)).join('\n    ')}
-  </div>
-</section>`).join('')}
-<section class="card" id="about-site">
-  <h2 class="cath">このサイトについて</h2>
+  <section class="catgroup">
+    ${g.group ? `<h3 class="cath">${esc(g.group)}</h3>` : ''}
+    <div class="catrow">
+      ${g.items.map((c) => catButton(c)).join('\n      ')}
+    </div>
+  </section>`).join('')}
+</details>
+<details class="card fold" id="about-site" data-fold="about">
+  <summary><h2 class="cath">このサイトについて</h2><small>あそび方と、おうちの人へ</small></summary>
   <p class="about-site">${esc(config.SITE_DESCRIPTION)} ピッチ図の青は味方、赤は相手、黄色のふちどりが「きみ」。ボールの場所と味方・相手のいる場所を見て、「つぎ、どこへ動く？」を考えよう。せいかいは1つとはかぎらない（1〜3つ）。答え合わせをすると、せいかいの動きがやじるしつきの図で、ちがう答えには理由がつく。中級からは「体の向き」（おうぎの形）、上級からは「ファーストタッチ」（太いやじるしとボール）も考える。わからないことばは <a href="${href('/words/')}">サッカーのことば</a> で調べられる。</p>
   <p class="about-site">コーチやおうちの人へ：練習前の5分、車の中、しあいの前の日など、短い時間で「考えるくせ」をつけるために作った問題集です。${config.HIDE_INFO_PAGES ? '問題についてのご意見は、コーチにちょくせつ教えてください。' : `問題についてのご意見は <a href="${href('/contact/')}">お問い合わせ</a> からどうぞ。`}</p>
-</section>
-<section class="card" id="list">
-  <h2 class="cath">問題リスト（全 ${QUESTIONS.length} 問）</h2>
+</details>
+<details class="card fold" id="list" data-fold="list">
+  <summary><h2 class="cath">問題リスト</h2><small>全 ${QUESTIONS.length} 問。番号からえらぶ</small></summary>
   <p class="hint" style="margin-bottom:10px">◎は全部せいかいした問題、○はやってみた問題。</p>
   ${questionList(QUESTIONS, '全部の問題から')}
-</section>
+</details>
 ${adSlot('home-bottom', 'TOPページの問題一覧の下')}`; // kanji-ok
   const jsonld = { '@context': 'https://schema.org', '@type': 'WebSite', name: config.SITE_NAME, url: abs('/'), description: config.SITE_DESCRIPTION, inLanguage: 'ja', author: { '@type': 'Person', name: config.OWNER_NAME } };
   return layout({ title: config.SITE_NAME, description: config.SITE_DESCRIPTION, pathname: '/', body, h1site: true,

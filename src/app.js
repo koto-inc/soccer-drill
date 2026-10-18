@@ -235,6 +235,18 @@
     showBest();          // まず端末内の記録
     mergeRemoteBest();   // スプレッドシートに大きい記録があれば差し替え
     loadRanking();
+    initFolds();
+  }
+  // 折りたたみカード（練習する・問題リスト）。最初は閉じていて、ひらいた／とじたは端末に覚える（localStorage 'pd-fold'）
+  function initFolds(){
+    var st=lsGet('pd-fold',{});
+    document.querySelectorAll('details[data-fold]').forEach(function(d){
+      var k=d.getAttribute('data-fold');
+      if(st[k]) d.open=true;
+      d.addEventListener('toggle',function(){ st[k]=d.open; lsSet('pd-fold',st); });
+    });
+    // #list などへのリンクで来たら、その折りたたみをひらく
+    if(location.hash){ var t=document.querySelector(location.hash+'[data-fold]'); if(t){ t.open=true; } }
   }
 
   /* ===== 👍👎 フィードバック（押すまで次へ進めない） =====
