@@ -202,7 +202,7 @@
     (root||document).querySelectorAll('[data-best]').forEach(function(el){
       var b=best[el.getAttribute('data-best')];
       if(!b){ el.hidden=true; return; }
-      var r=RANKS[b.rank]||{emoji:'',name:''};
+      var r=rankOf(Number(el.getAttribute('data-best')),Number(b.score)||0,Number(b.time)||0);   // ランクは今のはしごで計算し直す（はしごを変えても古い番号を出さない）
       el.textContent=(NAME?NAME+'さんの':'')+'ベストきろく: '+r.emoji+' '+r.name+' '+fmtScore(b.score)+'点 '+mmss(b.time);
       el.hidden=false;
     });
@@ -452,7 +452,7 @@
       ? (r.over ? '<p class="chtime over">⏱ タイム '+mmss(time)+' ／ もくひょう '+mmss(r.limit)+'<br><b>もくひょうタイムをすぎたので、ランク1つダウン</b></p>'
                 : '<p class="chtime ok">⏱ タイム '+mmss(time)+' ／ もくひょう '+mmss(r.limit)+'　<b>クリア！</b></p>')
       : '<p class="chtime">⏱ タイム '+mmss(time)+'</p>';
-    var pr=prev?RANKS[prev.rank]||{name:''}:null;
+    var pr=prev?rankOf(level,Number(prev.score)||0,Number(prev.time)||0):null;
     el.innerHTML=
       '<div class="card chres">'+
         '<div class="qno">'+esc(LVN[level])+'チャレンジ　けっか</div>'+
