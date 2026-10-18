@@ -226,10 +226,13 @@ button.big,.btn.big{font-size:18px;padding:14px 22px;border-radius:14px}
 @media (min-width:600px){ .rankcols{grid-template-columns:repeat(3,1fr);gap:10px} }
 .rankcol h3{font-size:14px;margin:0 0 6px;color:var(--accent);padding-bottom:4px;border-bottom:2px solid var(--accent-soft)}
 .rankcol ol{margin:0;padding-left:0;list-style:none;display:grid;gap:4px}
-.rankcol li{display:flex;align-items:center;gap:6px;font-size:14px;line-height:1.4;padding:4px 8px;border:1px solid var(--line);border-radius:10px}
-.rankcol li .no{flex:none;width:22px;font-weight:800;color:var(--muted);text-align:center}
-.rankcol li .nm{flex:1;min-width:0;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rankcol li .sc{flex:none;font-size:12px;color:var(--muted)}
+.rankcol li{display:flex;align-items:center;gap:8px;font-size:14px;line-height:1.35;padding:6px 10px;border:1px solid var(--line);border-radius:10px}
+.rankcol li .no{flex:none;width:24px;font-weight:800;font-size:16px;color:var(--muted);text-align:center}
+.rankcol li .body{flex:1;min-width:0;display:grid;gap:1px}
+.rankcol li .nm{font-weight:800;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rankcol li .sc{font-size:12px;color:var(--muted)}
+.rankcol li .sc b{color:var(--accent)}
+.rankcol li.top1 .sc b{color:#9a5b00}
 .rankcol li.me{border-color:var(--accent);background:var(--accent-soft)}
 .rankcol li.top1 .no{color:#9a5b00}
 .rankcol li.hint{border:none;padding:2px 0}

@@ -140,7 +140,7 @@
         ol.innerHTML=rows.map(function(x,i){
           var r=rankOf(Number(ol.getAttribute('data-ranking')),Number(x.score)||0,Number(x.time)||0);   // ランクは今の配点で計算し直す
           var cls=(x.name===NAME?' me':'')+(i===0?' top1':'');
-          return '<li class="'+cls.trim()+'"><span class="no">'+(i+1)+'</span><span class="nm">'+esc(x.name)+'</span><span class="sc">'+esc(r.emoji)+' '+fmtScore(x.score)+'点 '+mmss(x.time)+'</span></li>';
+          return '<li class="'+cls.trim()+'"><span class="no">'+(i+1)+'</span><span class="body"><span class="nm">'+esc(x.name)+'</span><span class="sc"><b>'+esc(r.emoji)+' '+esc(r.name)+'</b> ・ '+fmtScore(x.score)+'点 ・ '+mmss(x.time)+'</span></span></li>';
         }).join('');
       });
     }
