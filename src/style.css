@@ -222,8 +222,9 @@ button.big,.btn.big{font-size:18px;padding:14px 22px;border-radius:14px}
 :root[data-theme="dark"] .ladder span:last-child{background:#4a3a15;color:#ffcf70}
 .ladder i{font-style:normal;color:var(--muted);font-size:12px}
 .ranking{text-align:left}
-.rankcols{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
-.rankcol h3{font-size:14px;margin:0 0 4px;color:var(--accent)}
+.rankcols{display:grid;gap:14px;grid-template-columns:1fr}   /* スマホは入門→中級→上級の縦1列 */
+@media (min-width:600px){ .rankcols{grid-template-columns:repeat(3,1fr);gap:10px} }
+.rankcol h3{font-size:14px;margin:0 0 6px;color:var(--accent);padding-bottom:4px;border-bottom:2px solid var(--accent-soft)}
 .rankcol ol{margin:0;padding-left:0;list-style:none;display:grid;gap:4px}
 .rankcol li{display:flex;align-items:center;gap:6px;font-size:14px;line-height:1.4;padding:4px 8px;border:1px solid var(--line);border-radius:10px}
 .rankcol li .no{flex:none;width:22px;font-weight:800;color:var(--muted);text-align:center}
