@@ -154,13 +154,20 @@ TOP の「入門チャレンジ」「中級チャレンジ」「上級チャレ�
 - タイム: 問題を見てから「答え合わせ」を押すまでを各問で計り、10問の合計を出す（解説を読んでいる時間は含めない）
 - 目標タイム（`CHALLENGE.timeLimit`、秒）: 入門 5:00 / 中級 6:00 / 上級 7:00。合計がこれを超えるとランクが 1 つ下がる（そのレベルの最低ランクより下には下がらない）
 - ランク: `RANKS` のはしご（アマチュア級 → 少年サッカーエース級 → 高校サッカー級 → Jリーグ級 → 日本代表級 → ワールドカップ級）を、`CHALLENGE.rankTable` でレベルごとに割り当てる。入門の 10 点は Jリーグ級、上級の 10 点はワールドカップ級
-- 結果ページ（`/challenge/`）: 合計点・タイム（目標クリア／オーバー）・ランク・各問の◎○×一覧（タップでその問題へ）・「もう一度」「べつのレベルをやる」「TOPへ」
+- 結果ページ（`/challenge/`）: 合計点・タイム（目標クリア／オーバー）・ランク・各問の◎○×一覧（タップでその問題へ）・「🏆 ランキングにとうろくする」（`FEEDBACK_ENDPOINT` があるとき）・「もう一度」「べつのレベルをやる」「TOPへ」
+- TOP のチャレンジ枠には「級のはしご」（`RANKS` を順に並べたもの）と「入門で10点なら Jリーグ級、上級で10点なら…ワールドカップ級！」のあおり文が出る
 - ベスト記録はなまえ×レベルごとに端末（localStorage `pd:<name>:best`）に残り、TOP と /challenge/ の各ボタンの下に「〇〇さんのベストきろく: 🏟️ Jリーグ級 7.5点 4:32」と出る（スプレッドシートに大きい記録があればそれに差し替わる）。結果ページにも「🎉 〇〇さんの入門のベストきろく！」と出る
 - チャレンジ中は「べつの問題」「もう一回」は出ない（最初の答えで採点）。進行は sessionStorage なので、タブを閉じると消える
 
 ### 練習モード
 
 TOP の「練習する」でカテゴリ（レベル・場面・セットプレーの種類・ポジション）をえらぶと、その中からランダムに 1 問ずつ出題。「つぎの問題」で同じカテゴリの未出題からランダムに進み、全部出たら最初に戻る。採点やタイムはない。
+
+### ランキング（レベル別）
+
+結果ページで「🏆 ランキングにとうろくする」を押した記録だけが、TOP の「ランキング」（レベルごとにトップ 10 人）に出る。押さなければ出ない（オプトイン）。同じなまえは、とうろくした中のベスト（点が高い、同点ならタイムが短い）1 件だけ。TOP を開くと GAS の `?ranking=1` を取りに行き、取れないときは前回の結果（localStorage `pd-ranking`）を出す。自分のなまえの行は色がつく。`FEEDBACK_ENDPOINT` が空ならランキング枠もボタンも出ない。
+
+とうろくは端末からの申告なので、本気の不正対策はない（チーム内向け）。変な行はスプレッドシートの `ranking` シートから消せば消える（60 秒以内に反映）。
 
 ### なまえごとの記録
 
@@ -177,6 +184,7 @@ localStorage のキー:
 | `pd:<name>:solved` | 解いた印 `{ qid: 'ok' | 'tried' }` |
 | `pd:<name>:fb` | 👍👎 の送信済み `{ qid: payload }` |
 | `pd:<name>:tries` | 答え合わせをした回数 `{ qid: n }`（答えログの `attempt`） |
+| `pd-ranking` | 最後に取れたランキング `{ ts, data }`（取れないときの表示用） |
 
 なまえ導入前の `pd-best` / `pd-solved` / `pd-fb` は、その端末で最初に登録したなまえに引きつぐ（それ以外では読まない）。
 
@@ -189,10 +197,13 @@ localStorage のキー:
 - `type:'feedback'` … `{ type, name, qid, vote:'good'|'bad', comment, reasons:['ことばがわからない', …], level, phase, pos, ua, ts }` → **feedback** シート
 - `type:'result'` … `{ type, name, level, score, timeSec, rank, rankIdx, cleared, qids:[…], marks:'◎○×…', ts }` → **results** シート
 - `type:'answer'` … `{ type, name, qid, level, phase, pos, picked:[押した選択肢の添字 0〜4], correct:[正解の添字], result:'ok'|'partial'|'ng', timeSec, attempt, mode:'challenge'|'practice', ts }` → **answers** シート
+- `type:'rank'` … `{ type, name, level, score, timeSec, rank, rankIdx, ts }`（「ランキングにとうろく」を押したとき） → **ranking** シート
 
-返る JSON（GET `?name=…`）: `{ "1": { score, time, rank, cleared, ts }, "2": {…}, "3": {…} }`（記録が無いレベルは入らない。name が空なら `{}`。なまえの一覧や他の人の記録は返さない。答えログ・フィードバックは GET では返さない）
+返る JSON（GET `?name=…`）: `{ "1": { score, time, rank, cleared, ts }, "2": {…}, "3": {…} }`（記録が無いレベルは入らない。name が空なら `{}`。答えログ・フィードバックは GET では返さない）
 
-スプレッドシートは **feedback** / **results** / **answers** の 3 シート（ヘッダー行は自動で作られる。列が増えたときは足りないヘッダーだけ末尾に書き足され、既存の列は動かない）。結果を見るときは results シートを `name` 列でフィルタすると、その子のチャレンジ履歴（レベル・点・タイム・ランク・出た問題・◎○×の列）が時系列で並ぶ。
+返る JSON（GET `?ranking=1`）: `{ "1": [ { name, score, time, rank, rankIdx }, … ], "2": […], "3": […] }`（とうろくした人のベストを、レベルごとに点が高い順・同点ならタイムが短い順にトップ 10 人。60 秒キャッシュ、とうろくがあると消える）
+
+スプレッドシートは **feedback** / **results** / **answers** / **ranking** の 4 シート（ヘッダー行は自動で作られる。列が増えたときは足りないヘッダーだけ末尾に書き足され、既存の列は動かない）。結果を見るときは results シートを `name` 列でフィルタすると、その子のチャレンジ履歴（レベル・点・タイム・ランク・出た問題・◎○×の列）が時系列で並ぶ。
 
 #### answers シートの列と、問題を直すときの見方
 
@@ -220,7 +231,7 @@ localStorage のキー:
 2. メニュー「拡張機能」→「Apps Script」を開き、Code.gs の中身を [tools/feedback-gas.gs](tools/feedback-gas.gs) で置きかえて保存
 3. 「デプロイ」→「新しいデプロイ」→ 種類「ウェブアプリ」→ 次のユーザーとして実行: **自分**、アクセスできるユーザー: **全員** →「デプロイ」（権限の承認が出たら許可）
 4. 表示された「ウェブアプリの URL」（`https://script.google.com/macros/s/…/exec`）を `FEEDBACK_ENDPOINT` に貼って `npm run build`
-5. 届いた内容はそのスプレッドシートの `feedback` / `results` / `answers` シートに 1 行ずつ追記される（ヘッダー行は自動で作られる）
+5. 届いた内容はそのスプレッドシートの `feedback` / `results` / `answers` / `ranking` シートに 1 行ずつ追記される（ヘッダー行は自動で作られる）
 6. GAS のコードを直したら「デプロイ」→「デプロイを管理」→ 新バージョンでデプロイ（URL は変わらない）
 
 サイト側は `navigator.sendBeacon(url, Blob(JSON文字列, text/plain))`（使えなければ `fetch(url, { method: 'POST', mode: 'no-cors', keepalive: true, headers: { 'Content-Type': 'text/plain' }, body: JSON文字列 })`）で送るので、CORS の設定は不要で、👍 の直後にページを移っても送信は消えない。ベスト記録の取得は通常の `fetch(url + '?name=…')` → `JSON.parse`（GAS のリダイレクトはそのまま follow）。

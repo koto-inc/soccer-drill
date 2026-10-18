@@ -300,7 +300,7 @@ function gateMarkup() {
       <label class="gate-label" for="gateName">なまえ（ニックネームでOK）</label>
       <input class="gate-input gate-name" id="gateName" type="text" maxlength="12" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="なまえ" aria-label="なまえ" required>
       <div class="gate-names" id="gateNames" hidden></div>
-      <p class="gate-note">本名でなくてもいいよ。きろくを分けるために使うよ。</p>
+      <p class="gate-note">本名でなくてもいいよ。きろくを分けたり、ランキングにのせたりするのに使うよ。</p>
     </div>
     <p class="gate-err" id="gateErr" hidden></p>
     <button class="primary big" type="submit">はいる</button>
@@ -339,15 +339,31 @@ function challengeButtons() {
 function challengeTopMarkup() {
   const c = config.CHALLENGE;
   const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const ranks = config.RANKS;
+  const top = (l) => ranks[c.rankTable[l][c.rankTable[l].length - 1]];
   return `${whoMarkup()}
 <section class="card challenge">
   <h2 class="cath">${c.count}問チャレンジ</h2>
-  <p class="hint" style="margin-bottom:10px">えらんだレベルからランダムに${c.count}問。◎=1点、○=0.5点で${c.count}点まんてん。タイムも計るよ（もくひょう ${LV[1]} ${mmss(c.timeLimit[1])}・${LV[2]} ${mmss(c.timeLimit[2])}・${LV[3]} ${mmss(c.timeLimit[3])}）。</p>
+  <p class="chlead">${c.count}問とくと、きみの<b>級</b>が決まる！</p>
+  <p class="ladder">${ranks.map((r) => `<span>${r.emoji}${esc(r.name)}</span>`).join('<i>→</i>')}</p>
+  <p class="hint" style="margin-bottom:10px">${LV[1]}で${c.count}点なら ${top(1).emoji}${esc(top(1).name)}。${LV[3]}で${c.count}点なら…${top(3).emoji}<b>${esc(top(3).name)}</b>！ タイムがおそいとランクが1つ下がるよ（もくひょう ${LV[1]} ${mmss(c.timeLimit[1])}・${LV[2]} ${mmss(c.timeLimit[2])}・${LV[3]} ${mmss(c.timeLimit[3])}）。◎=1点、○=0.5点で${c.count}点まんてん。${config.FEEDBACK_ENDPOINT ? 'ベストきろくを<a href="#ranking">ランキング</a>にとうろくして、チームのトップをねらえ！' : ''}</p>
   <div class="chbtns">
     ${challengeButtons()}
   </div>
 </section>`;
 }
+// TOP のレベル別ランキング（中身は app.js が GAS から取って描く。FEEDBACK_ENDPOINT が無いときは出さない）
+function rankingMarkup() {
+  if (!config.FEEDBACK_ENDPOINT) return '';
+  return `<section class="card ranking" id="ranking">
+  <h2 class="cath">ランキング</h2>
+  <p class="hint">${config.CHALLENGE.count}問チャレンジのあとに「ランキングにとうろく」した人のベストきろく（レベルごとにトップ${RANKING_TOP}人）。</p>
+  <div class="rankcols">
+    ${[1, 2, 3].map((l) => `<div class="rankcol"><h3>${LV[l]}</h3><ol data-ranking="${l}"><li class="hint">よみこみ中…</li></ol></div>`).join('\n    ')}
+  </div>
+</section>`;
+}
+const RANKING_TOP = 10;
 
 function layout({ title, description, pathname, body, ogImage, ogType = 'website', h1site = false, extraHead = '' }) {
   const fullTitle = pathname === '/' ? `${config.SITE_NAME}｜${config.TAGLINE}` : `${title}｜${config.SITE_NAME}`;
@@ -497,6 +513,7 @@ function questionList(list, label) {
 function indexPage() {
   const body = `
 ${challengeTopMarkup()}
+${rankingMarkup()}
 <h2 class="cath" style="margin-top:6px">練習する</h2>
 <p class="intro">カテゴリをえらぼう。えらんだカテゴリの問題が、1問ずつランダムに出てくる（点数やタイムはなし。すきなだけできる）。<span class="hint">（全 ${QUESTIONS.length} 問・せいかい <span id="doneAll">0</span> 問）</span></p>
 ${CATS.map((g) => `

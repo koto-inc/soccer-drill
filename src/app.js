@@ -129,6 +129,31 @@
     }catch(e){}
   }
 
+  // TOP のレベル別ランキング（GAS の ?ranking=1）。取れないときは前回の取得結果（localStorage 'pd-ranking'）を出す
+  function loadRanking(){
+    var lists=document.querySelectorAll('[data-ranking]');
+    if(!lists.length||!CFG.feedback) return;
+    function render(data){
+      lists.forEach(function(ol){
+        var rows=(data&&data[ol.getAttribute('data-ranking')])||[];
+        if(!rows.length){ ol.innerHTML='<li class="hint">まだだれもいないよ。1番のりをねらおう！</li>'; return; }
+        ol.innerHTML=rows.map(function(x,i){
+          var r=RANKS[x.rankIdx]||{emoji:''};
+          var cls=(x.name===NAME?' me':'')+(i===0?' top1':'');
+          return '<li class="'+cls.trim()+'"><span class="no">'+(i+1)+'</span><span class="nm">'+esc(x.name)+'</span><span class="sc">'+esc(r.emoji)+' '+fmtScore(x.score)+'点 '+mmss(x.time)+'</span></li>';
+        }).join('');
+      });
+    }
+    var cached=lsGet('pd-ranking',null);
+    if(cached&&cached.data) render(cached.data);
+    try{
+      fetch(CFG.feedback+(CFG.feedback.indexOf('?')>=0?'&':'?')+'ranking=1')
+        .then(function(r){ return r.json(); })
+        .then(function(data){ if(data&&typeof data==='object'){ lsSet('pd-ranking',{ts:Date.now(),data:data}); render(data); } })
+        .catch(function(){ if(!(cached&&cached.data)) lists.forEach(function(ol){ ol.innerHTML='<li class="hint">ランキングをよみこめなかった。あとでもう一度見てね。</li>'; }); });
+    }catch(e){}
+  }
+
   /* ===== ランク（レベル × 点数 × タイム） ===== */
   function bandIndex(score){ var b=CH.bands||[0]; var i=0; for(var k=0;k<b.length;k++){ if(score>=b[k]) i=k; } return i; }
   function rankOf(level,score,timeSec){
@@ -209,6 +234,7 @@
     initWho();
     showBest();          // まず端末内の記録
     mergeRemoteBest();   // スプレッドシートに大きい記録があれば差し替え
+    loadRanking();
   }
 
   /* ===== 👍👎 フィードバック（押すまで次へ進めない） =====
@@ -411,6 +437,9 @@
         '<div class="chrank"><span class="chemoji">'+esc(r.emoji)+'</span><span class="chname">'+esc(r.name)+'</span></div>'+
         '<p class="chmsg">'+esc(r.msg)+'</p>'+
         (isNew?'<p class="chnew">🎉 '+esc(NAME?NAME+'さんの':'')+esc(LVN[level])+'のベストきろく！</p>':'<p class="hint">'+esc(NAME?NAME+'さんの':'')+esc(LVN[level])+'のベストきろく: '+esc(pr.name)+' '+fmtScore(prev.score)+'点 '+mmss(prev.time)+'</p>')+
+        (CFG.feedback&&NAME?'<div class="chreg" id="chReg">'+(ch.ranked
+          ?'<p class="hint">このきろくはランキングにとうろくずみ。<a href="'+BASE+'/#ranking">ランキングを見る</a></p>'
+          :'<button class="primary big" type="button" id="btnRank">🏆 ランキングにとうろくする</button><p class="hint">「'+esc(NAME)+'」のなまえで、TOP のランキングにのるよ。</p>')+'</div>':'')+
       '</div>'+
       '<div class="card">'+
         '<p class="hint" style="margin-bottom:10px">◎=1点、○=0.5点、×=0点。タップすると、その問題をもう一度見られる。</p>'+
@@ -421,6 +450,16 @@
       '<div class="actions"><button class="primary big" type="button" data-start-challenge="'+level+'">もう一度</button><button type="button" id="btnOtherLevel">べつのレベルをやる</button><a class="btn" href="'+BASE+'/">TOPへ</a></div>';
     bindStartButtons(el);
     document.getElementById('btnOtherLevel').addEventListener('click',function(){ ssSet('pd-ch',null); location.href=BASE+'/challenge/'; });
+    // ランキングにとうろく（この結果を1回だけ。押した人の記録だけがランキングに出る）
+    var btnRank=document.getElementById('btnRank');
+    if(btnRank) btnRank.addEventListener('click',function(){
+      var cur=ssGet('pd-ch'); if(!cur||cur.ranked) return;
+      cur.ranked=true; ssSet('pd-ch',cur);
+      post({type:'rank',name:NAME,level:level,score:total,timeSec:Math.round(time),rank:r.name,rankIdx:r.idx,ts:new Date().toISOString()});
+      try{ localStorage.removeItem('pd-ranking'); }catch(e){}   // 次に TOP を開いたら取り直す
+      document.getElementById('chReg').innerHTML='<p class="chnew">🏆 とうろくしたよ！</p><p class="hint"><a href="'+BASE+'/#ranking">TOP のランキングを見る</a>（出るまで少し時間がかかることがあるよ）</p>';
+      if(window.gtag){ try{ gtag('event','rank_register',{level:level,score:total}); }catch(e){} }
+    });
   }
 
   /* ===== サッカー用語（点線の下線）: タップで説明を出す ===== */

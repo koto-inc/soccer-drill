@@ -202,6 +202,28 @@ button.big,.btn.big{font-size:18px;padding:14px 22px;border-radius:14px}
 :root[data-theme="dark"] .chnew{background:#4a3a15;color:#ffcf70}
 .item .mk.ok{color:var(--ok)}.item .mk.partial{color:#9a5b00}.item .mk.ng{color:var(--ng)}
 
+/* ===== 級のはしご・ランキング ===== */
+.chlead{margin:0 0 6px;font-weight:800;font-size:17px}
+.chlead b{color:var(--accent);font-size:20px}
+.ladder{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:4px 2px;margin:0 0 8px;font-size:13px;font-weight:800}
+.ladder span{background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:2px 9px;white-space:nowrap}
+.ladder span:last-child{background:#fff1d6;color:#9a5b00}
+:root[data-theme="dark"] .ladder span:last-child{background:#4a3a15;color:#ffcf70}
+.ladder i{font-style:normal;color:var(--muted);font-size:12px}
+.ranking{text-align:left}
+.rankcols{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.rankcol h3{font-size:14px;margin:0 0 4px;color:var(--accent)}
+.rankcol ol{margin:0;padding-left:0;list-style:none;display:grid;gap:4px}
+.rankcol li{display:flex;align-items:center;gap:6px;font-size:14px;line-height:1.4;padding:4px 8px;border:1px solid var(--line);border-radius:10px}
+.rankcol li .no{flex:none;width:22px;font-weight:800;color:var(--muted);text-align:center}
+.rankcol li .nm{flex:1;min-width:0;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rankcol li .sc{flex:none;font-size:12px;color:var(--muted)}
+.rankcol li.me{border-color:var(--accent);background:var(--accent-soft)}
+.rankcol li.top1 .no{color:#9a5b00}
+.rankcol li.hint{border:none;padding:2px 0}
+.chreg{margin:12px 0 0;display:grid;gap:6px;justify-items:center}
+.chreg .hint{margin:0}
+
 /* ===== レベル別チャレンジ / 👍👎 必須 ===== */
 .chbtns{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
 .chbtn .btn.big{display:block;width:100%;text-align:center}
