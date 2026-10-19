@@ -76,9 +76,9 @@ function markTerms(text, seen) {
 function wordsBox(q) {
   const list = termsIn(q);
   if (!list.length) return '';
-  // 用語が多い問題でも選択肢が遠くならないよう、<details> でとじられるようにする（最初は開いている）
-  return `<details class="words" open>
-        <summary class="wtitle">ことば（${list.length}）</summary>
+  // 最初は閉じていて、タップでひらく（選択肢が遠くならないように）
+  return `<details class="words">
+        <summary class="wtitle">ことばのいみがしりたい（${list.length}）</summary>
         <dl>${list.map((t) => `<div><dt>${esc(t.t)}</dt><dd>${esc(t.d)}</dd></div>`).join('')}</dl>
         <a class="wmore" href="${href('/words/')}">ほかのことばも見る →</a>
       </details>`;
