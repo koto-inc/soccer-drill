@@ -53,6 +53,19 @@
   }
   // FEEDBACK_ENDPOINT（GAS）へ送る。空なら何もしない。返事は読まない。
   // 👍 のすぐあとに「つぎの問題」でページを移っても送信が消えないよう、sendBeacon（だめなら keepalive 付き fetch）を使う
+  // 端末の種類を「スマホ／タブレット／PC」の3つに丸める（UA の生の文字列は送らない）
+  function deviceType(){
+    try{
+      var ua=navigator.userAgent||"", w=Math.min(screen.width||0,screen.height||0)||window.innerWidth;
+      var touch=("ontouchstart" in window)||(navigator.maxTouchPoints||0)>0;
+      if(/iPad/.test(ua)||(/Macintosh/.test(ua)&&touch)) return "タブレット";
+      if(/iPhone|iPod/.test(ua)||(/Android/.test(ua)&&/Mobile/.test(ua))) return "スマホ";
+      if(/Android/.test(ua)) return "タブレット";
+      if(touch&&w<600) return "スマホ";
+      if(touch&&w<1100) return "タブレット";
+      return "PC";
+    }catch(e){ return ""; }
+  }
   function post(payload){
     if(!CFG.feedback) return;
     if(CFG.fkey) payload.key=CFG.fkey;
@@ -286,8 +299,8 @@
       all[id]={type:'feedback',name:NAME,qid:Number(id),vote:vote,comment:(input.value||'').trim().slice(0,100),
         reasons:vote==='bad'?pickedReasons():[],
         level:Number(root.getAttribute('data-level')),phase:root.getAttribute('data-phase'),pos:root.getAttribute('data-pos'),
-        ts:new Date().toISOString()};
-      lsSet(nk('fb'),all);   // 1問につき1件（送り直しは上書き）
+        device:deviceType(),ts:new Date().toISOString()};
+      lsSet(nk("fb"),all);   // 1問につき1件（送り直しは上書き）
       schedule();
     }
     if(all[id]){
