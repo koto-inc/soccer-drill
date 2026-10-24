@@ -415,8 +415,13 @@
       if(cls==='ok'||!solved[id]){ solved[id]=cls==='ok'?'ok':'tried'; lsSet(nk('solved'),solved); }
       // 1問ごとの答えログ（問題を直すためのデータ）。attempt はこの名前でこの問題に答えた回数（「もう一回」も数える）
       var tries=lsGet(nk('tries'),{}); tries[id]=(Number(tries[id])||0)+1; lsSet(nk('tries'),tries);
+      // 答えログの時間超過と得点は、この行の timeSec（問題表示→答え合わせ）から採点ルールどおりに計算して送る
+      var tSec=Math.round((Date.now()-shownAt)/100)/10;
+      var lateLog=tSec>QSEC;
+      var baseLog=hit===correct.length?1:(hit>0?0.5:0);
+      var scoreLog=Math.max(0,Math.round((baseLog-miss*MPEN-(lateLog?TPEN:0))*10)/10);
       post({type:'answer',name:NAME,qid:Number(id),level:Number(root.getAttribute('data-level')),phase:root.getAttribute('data-phase'),pos:root.getAttribute('data-pos'),
-        picked:picked.slice(),correct:correct,result:cls,timeSec:Math.round((Date.now()-shownAt)/100)/10,attempt:tries[id],
+        picked:picked.slice(),correct:correct,hit:hit,miss:miss,result:cls,timeSec:tSec,late:lateLog,score:scoreLog,attempt:tries[id],
         mode:ch?'challenge':'practice',ts:new Date().toISOString()});
       // チャレンジの採点とタイムを記録
       if(ch){

@@ -200,7 +200,7 @@ localStorage のキー:
 - `type:'feedback'` … `{ type, name, qid, vote:'good'|'bad', comment, reasons:['ことばがわからない', …], level, phase, pos, device（'スマホ'｜'タブレット'｜'PC'。シートでは ua 列に入る）, ts }` → **feedback** シート
 - 👎 のときは **badlist** シートにも1行（最終更新・name・qid・問題ページのURL・level/phase/pos・reasons・comment・ua・pressTs）。1回の押下につき1行で、チップや一言を足した送り直し（同じ `pressTs`）は行を更新、別の押下（同じ子が同じ問題でまた 👎）は別の行。あとで 👍 に変わっても消さない。過去の feedback から作り直すときは Apps Script エディタで `rebuildBadlist` を実行（何度でも可。badlist に手で書いたメモは消える）（押下ごと＝name+qid+pressTs に1行。`pressTs` が無い古い行は name+qid で1つの押下とみなす）
 - `type:'result'` … `{ type, name, level, score, timeSec, rank, rankIdx, cleared, qids:[…], marks:'◎○×…', ts }` → **results** シート
-- `type:'answer'` … `{ type, name, qid, level, phase, pos, picked:[押した選択肢の添字 0〜4], correct:[正解の添字], result:'ok'|'partial'|'ng', timeSec, attempt, mode:'challenge'|'practice', ts }` → **answers** シート
+- `type:'answer'` … `{ type, name, qid, level, phase, pos, picked:[押した選択肢の添字 0〜4], correct:[正解の添字], hit, miss, result:'ok'|'partial'|'ng', timeSec, late, score, attempt, mode:'challenge'|'practice', ts }` → **answers** シート（列: 受信日時・ts・name・qid・level・phase・pos・picked「ア,ウ」・correct「ア,ウ」・正解数・不正解数・result OK/PARTIAL/NG・時間超過 OK/OVER・timeSec・得点・attempt・mode。古い行は `migrateAnswers` を1回実行で同じ形に）
 - `type:'rank'` … `{ type, name, level, score, timeSec, rank, rankIdx, ts }`（「ランキングにとうろく」を押したとき） → **ranking** シート
 
 返る JSON（GET `?name=…`）: `{ "1": { score, time, rank, cleared, ts }, "2": {…}, "3": {…} }`（記録が無いレベルは入らない。name が空なら `{}`。答えログ・フィードバックは GET では返さない）

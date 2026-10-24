@@ -25,8 +25,11 @@
  *   type:'result'   { type, key, name, level:1|2|3, score(7点満点。1問 ＝ 正解のぶん − 0.5×まちがいの数 − 30秒超過0.5、下限0), timeSec, rank(ランク名), rankIdx, cleared(30秒をこえた問題が1つも無ければ true),
  *                     qids:[出た問題のID], marks:'◎○×…'(問題数ぶんの文字), ts }                   → 'results' シート
  *   type:'answer'   { type, key, name, qid, level, phase, pos, picked:[押した選択肢の添字 0〜4], correct:[正解の添字],
- *                     result:'ok'|'partial'|'ng', timeSec(問題表示→答え合わせ), attempt(同じ問題で何回目か),
+ *                     hit(正解を選んだ数), miss(まちがいを選んだ数), result:'ok'|'partial'|'ng', timeSec(問題表示→答え合わせ),
+ *                     late(30秒をこえたら true), score(採点ルールどおりの得点。下限0), attempt(同じ問題で何回目か),
  *                     mode:'challenge'|'practice', ts }                                            → 'answers' シート
+ *                   シートでは picked/correct は「ア,ウ」のように記号、result は OK/PARTIAL/NG、時間超過は OK/OVER で書く
+ *                   （古い形式の行は migrateAnswers を1回実行すると同じ形に直る）
  *   type:'rank'     { type, key, name, level, score, timeSec, rank, rankIdx, ts }（結果ページで「ランキングにとうろく」を押したとき）
  *                                                                                                  → 'ranking' シート
  *   type が無いものは feedback として扱う（古いサイトからの送信）。返事: {ok:true} / {ok:false,error}
@@ -49,7 +52,7 @@ var SPREADSHEET_ID = '1UuAX2vNxlX5qw1t5MUyPKB52Tl9fp59Z5gY7KJXVsN0';
 var SHEETS = {
   feedback: { name: 'feedback', header: ['受信日時', 'ts(端末)', 'name', 'qid', 'vote', 'comment', 'level', 'phase', 'pos', 'ua', 'reasons', 'pressTs'] },
   result:   { name: 'results',  header: ['受信日時', 'ts(端末)', 'name', 'level', 'score', 'timeSec', 'rank', 'rankIdx', 'cleared', 'qids', 'marks'] },
-  answer:   { name: 'answers',  header: ['受信日時', 'ts(端末)', 'name', 'qid', 'level', 'phase', 'pos', 'picked', 'correct', 'result', 'timeSec', 'attempt', 'mode'] },
+  answer:   { name: 'answers',  header: ['受信日時', 'ts(端末)', 'name', 'qid', 'level', 'phase', 'pos', 'picked', 'correct', '正解数', '不正解数', 'result', '時間超過', 'timeSec', '得点', 'attempt', 'mode'] },
   rank:     { name: 'ranking',  header: ['受信日時', 'ts(端末)', 'name', 'level', 'score', 'timeSec', 'rank', 'rankIdx'] },
 };
 var RANKING_TOP = 10;   // ランキングに出す人数（レベルごと）
@@ -129,11 +132,7 @@ function doPost(e) {
       ]));
       CacheService.getScriptCache().remove('ranking');   // すぐランキングに出るように
     } else if (type === 'answer') {
-      sh.appendRow(row_([
-        new Date(), d.ts || '', cleanName_(d.name), Number(d.qid) || '', Number(d.level) || '', String(d.phase || '').slice(0, 30), String(d.pos || '').slice(0, 30),
-        joinList_(d.picked, 20), joinList_(d.correct, 20), String(d.result || '').slice(0, 10), Number(d.timeSec) || 0, Number(d.attempt) || 0,
-        String(d.mode || '').slice(0, 10)
-      ]));
+      sh.appendRow(row_(answerRow_(d)));
     } else if (type === 'result') {
       sh.appendRow(row_([
         new Date(), d.ts || '', cleanName_(d.name), Number(d.level) || '', Number(d.score) || 0, Number(d.timeSec) || 0,
@@ -309,4 +308,56 @@ function rebuildBadlist() {
   if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
   if (out.length) sh.getRange(2, 1, out.length, BADLIST.header.length).setValues(out);
   Logger.log(out.length + ' 件を badlist に並べた');
+}
+
+// ---- answers シートの行の作り方（picked/correct は記号、正解数・不正解数・時間超過・得点つき） ----
+var KEYS_ = ['ア', 'イ', 'ウ', 'エ', 'オ'];
+var ANS_RULE = { perQuestionSec: 30, missPenalty: 0.5, timePenalty: 0.5 };   // サイト側（site.config.mjs の CHALLENGE）と同じ値にする。migrateAnswers の計算に使う
+// 添字の配列（または '0,2' のような文字列）→ 'ア,ウ'
+function letters_(v) {
+  var arr = Array.isArray(v) ? v : String(v == null ? '' : v).split(',');
+  return arr.map(function (x) { var s = String(x).trim(); if (s === '') return ''; return /^[0-4]$/.test(s) ? KEYS_[Number(s)] : s; }).filter(Boolean).join(',');
+}
+function toIdx_(v) {   // 'ア,ウ' や '0,2' → [0,2]
+  var arr = Array.isArray(v) ? v : String(v == null ? '' : v).split(',');
+  return arr.map(function (x) { var s = String(x).trim(); if (/^[0-4]$/.test(s)) return Number(s); var k = KEYS_.indexOf(s); return k; }).filter(function (i) { return i >= 0; });
+}
+function answerScore_(hit, miss, nCorrect, late) {   // 1問の得点 ＝ 正解のぶん − 0.5×まちがい − 時間超過0.5（下限0）
+  var base = hit === nCorrect && nCorrect > 0 ? 1 : (hit > 0 ? 0.5 : 0);
+  return Math.max(0, Math.round((base - miss * ANS_RULE.missPenalty - (late ? ANS_RULE.timePenalty : 0)) * 10) / 10);
+}
+function answerRow_(d) {
+  var picked = toIdx_(d.picked), correct = toIdx_(d.correct);
+  var hit = (typeof d.hit === 'number') ? d.hit : picked.filter(function (i) { return correct.indexOf(i) >= 0; }).length;
+  var miss = (typeof d.miss === 'number') ? d.miss : picked.length - hit;
+  var timeSec = Number(d.timeSec) || 0;
+  var late = (typeof d.late === 'boolean') ? d.late : timeSec > ANS_RULE.perQuestionSec;
+  var score = (typeof d.score === 'number') ? d.score : answerScore_(hit, miss, correct.length, late);
+  var result = String(d.result || '').toUpperCase().slice(0, 10);
+  return [
+    d.at instanceof Date ? d.at : new Date(), d.ts || '', cleanName_(d.name), Number(d.qid) || '', Number(d.level) || '', String(d.phase || '').slice(0, 30), String(d.pos || '').slice(0, 30),
+    letters_(picked), letters_(correct), hit, miss, result, late ? 'OVER' : 'OK', timeSec, score, Number(d.attempt) || 0, String(d.mode || '').slice(0, 10)
+  ];
+}
+// ---- 必要なときに手で実行する（何度でも可）: answers シートの古い形式の行を新しい列の並びに直す ----
+// Apps Script エディタで migrateAnswers を選んで「実行」。ヘッダーに「得点」があれば変換済みとみなして何もしない。
+// 古い行の 正解数・不正解数・時間超過・得点 は picked/correct/timeSec から ANS_RULE で計算する
+function migrateAnswers() {
+  var ss = getSpreadsheet_();
+  var sh = ss.getSheetByName(SHEETS.answer.name);
+  if (!sh || sh.getLastRow() < 1) { Logger.log('answers シートがありません'); return; }
+  var header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  if (header.indexOf('得点') >= 0) { Logger.log('すでに新しい形式です'); return; }
+  var c = function (k) { return header.indexOf(k); };
+  var rows = sh.getLastRow() >= 2 ? sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues() : [];
+  var out = rows.map(function (r) {
+    return row_(answerRow_({ at: r[c('受信日時')], ts: r[c('ts(端末)')], name: r[c('name')], qid: r[c('qid')], level: r[c('level')], phase: r[c('phase')], pos: r[c('pos')],
+      picked: r[c('picked')], correct: r[c('correct')], result: r[c('result')], timeSec: r[c('timeSec')], attempt: r[c('attempt')], mode: r[c('mode')] }));
+  });
+  sh.clearContents();
+  var h = SHEETS.answer.header;
+  sh.getRange(1, 1, 1, h.length).setValues([h]).setFontWeight('bold');
+  sh.setFrozenRows(1);
+  if (out.length) sh.getRange(2, 1, out.length, h.length).setValues(out);
+  Logger.log(out.length + ' 行を新しい形式に直した');
 }
