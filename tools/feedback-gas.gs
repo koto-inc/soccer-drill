@@ -145,7 +145,7 @@ function doPost(e) {
         new Date(), d.ts || '', cleanName_(d.name), d.qid || '', d.vote || '', String(d.comment || '').slice(0, 200),
         d.level || '', d.phase || '', d.pos || '', String(d.device || '').slice(0, 20) /* 端末の種類（スマホ／タブレット／PC）。UA の生の文字列は送られてこない。列名は ua のまま */, joinList_(d.reasons, 200)
       ]));
-      updateBadlist_(d);   // 👎 なら badlist に追記（同じ name+qid は更新、👍 に変わったら削除）
+      updateBadlist_(d);   // 👎 なら badlist に追記（同じ name+qid は更新。👍 に変わっても消さない）
     }
     return json_({ ok: true });
   } catch (err) {
