@@ -255,4 +255,3 @@ button.big,.btn.big{font-size:18px;padding:14px 22px;border-radius:14px}
   .fb.shake{animation:pd-shake .4s}
   @keyframes pd-shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 }
-.spd{color:#c98a00;letter-spacing:.05em}
