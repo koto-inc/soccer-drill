@@ -220,39 +220,6 @@ function ranking_() {
   return out;
 }
 
-// ---- 1回だけ手で実行する: feedback シートの古い ua 列（UA の生の文字列）を「スマホ／タブレット／PC」に置きかえる ----
-// Apps Script エディタで、上の関数えらびから migrateUaToDevice を選んで「実行」。初回は権限の承認が出る。
-// すでに「スマホ／タブレット／PC」か空のセルはそのまま。終わるとログに「n 行を置きかえた」と出る（表示 → ログ）。
-// 注意: iPadOS 13 以降の Safari は UA が Mac と同じなので「PC」になる（サイト側は画面のタッチで見分けるが、過去の UA からは分からない）
-function deviceFromUa_(ua) {
-  ua = String(ua || '');
-  if (!ua) return '';
-  if (/iPad/.test(ua)) return 'タブレット';
-  if (/iPhone|iPod/.test(ua)) return 'スマホ';
-  if (/Android/.test(ua)) return /Mobile/.test(ua) ? 'スマホ' : 'タブレット';
-  return 'PC';
-}
-function migrateUaToDevice() {
-  var ss = getSpreadsheet_();
-  var sh = ss.getSheetByName(SHEETS.feedback.name);
-  if (!sh || sh.getLastRow() < 2) { Logger.log('feedback シートに行がありません'); return; }
-  var header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
-  var col = header.indexOf('ua');
-  if (col < 0) { Logger.log('ua 列が見つかりません'); return; }
-  var range = sh.getRange(2, col + 1, sh.getLastRow() - 1, 1);
-  var vals = range.getValues();
-  var n = 0;
-  var done = { 'スマホ': 1, 'タブレット': 1, 'PC': 1 };
-  for (var i = 0; i < vals.length; i++) {
-    var v = String(vals[i][0] || '').trim();
-    if (!v || done[v]) continue;
-    vals[i][0] = deviceFromUa_(v);
-    n++;
-  }
-  range.setValues(vals);
-  Logger.log(n + ' 行を置きかえた');
-}
-
 // ---- badlist: 👎 が押された問題の一覧（1人×1問につき1行。送り直しは更新。あとで 👍 に変わっても消さない） ----
 var SITE_URL = 'https://koto-inc.github.io/soccer-drill';   // 問題ページへのリンク用
 var BADLIST = { name: 'badlist', header: ['最終更新', 'name', 'qid', '問題ページ', 'level', 'phase', 'pos', 'reasons', 'comment', 'ua'] };
