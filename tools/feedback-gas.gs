@@ -9,7 +9,7 @@
  *   - セルに書く文字列の先頭が = + - @ なら空白を足して、数式として実行されないようにする
  *
  * 使い方（README「👍👎・チャレンジ結果の受け口」も参照）
- * 1. 保存先のスプレッドシートを開く（SPREADSHEET_ID のシート。別のシートにしたいときは ID を書きかえる）
+ * 1. 保存先は SPREADSHEET_ID のスプレッドシート「ポジショニングドリル 記録」。コードを貼る場所（Apps Script）は以前のシートのままでよい
  * 2. メニュー「拡張機能」→「Apps Script」を開き、Code.gs の中身をこのファイルの内容で置きかえて保存
  * 3. 右上「デプロイ」→「新しいデプロイ」→ 種類「ウェブアプリ」
  *      説明: feedback / 次のユーザーとして実行: 自分 / アクセスできるユーザー: 全員
@@ -48,7 +48,9 @@
 // サイトとの共通キー（site.config.mjs の FEEDBACK_KEY と同じ文字列）。空なら照合しない。違うキーの送信・取得は受け付けない
 var API_KEY = 'uiJU7xMjpPRvn2oYnakg';
 
-var SPREADSHEET_ID = '1UuAX2vNxlX5qw1t5MUyPKB52Tl9fp59Z5gY7KJXVsN0';
+var SPREADSHEET_ID = '1YknDgxeJRjtdRb1iSn1rt6DSYRQHRG-3kFdRnZNJBAY';   // 「ポジショニングドリル 記録」（Claude のコネクタから読める方）
+// 以前の保存先（Apps Script が貼ってあるシート）。migrateSpreadsheet で中身を新しい方へコピーしたら、もう使わない
+var OLD_SPREADSHEET_ID = '1UuAX2vNxlX5qw1t5MUyPKB52Tl9fp59Z5gY7KJXVsN0';
 
 var SHEETS = {
   feedback: { name: 'feedback', header: ['受信日時', 'ts(端末)', 'name', 'qid', 'vote', 'comment', 'level', 'phase', 'pos', 'ua', 'reasons', 'pressTs', 'picked', 'correct', 'result', 'timeSec'] },
@@ -364,4 +366,29 @@ function migrateAnswers() {
   sh.setFrozenRows(1);
   if (out.length) sh.getRange(2, 1, out.length, h.length).setValues(out);
   Logger.log(out.length + ' 行を新しい形式に直した');
+}
+
+// ---- 必要なときに手で実行する: 以前のスプレッドシート（OLD_SPREADSHEET_ID）の全シートを、今の保存先（SPREADSHEET_ID）へコピーする ----
+// Apps Script エディタで migrateSpreadsheet を選んで「実行」。同じ名前のシートがあれば中身を置きかえる（ヘッダーごと）。
+// 何度実行しても結果は同じ。新しい方に最初からある「シート1」は、ほかのシートができたら消す
+function migrateSpreadsheet() {
+  if (!OLD_SPREADSHEET_ID || OLD_SPREADSHEET_ID === SPREADSHEET_ID) { Logger.log('OLD_SPREADSHEET_ID が設定されていないか、同じシートです'); return; }
+  var from = SpreadsheetApp.openById(OLD_SPREADSHEET_ID);
+  var to = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var names = [SHEETS.feedback.name, SHEETS.result.name, SHEETS.answer.name, SHEETS.rank.name, BADLIST.name];
+  var done = [];
+  names.forEach(function (n) {
+    var src = from.getSheetByName(n);
+    if (!src || src.getLastRow() < 1) return;
+    var vals = src.getDataRange().getValues();
+    var dst = to.getSheetByName(n) || to.insertSheet(n);
+    dst.clearContents();
+    dst.getRange(1, 1, vals.length, vals[0].length).setValues(vals);
+    dst.getRange(1, 1, 1, vals[0].length).setFontWeight('bold');
+    dst.setFrozenRows(1);
+    done.push(n + ' ' + (vals.length - 1) + '行');
+  });
+  var extra = to.getSheetByName('シート1') || to.getSheetByName('Sheet1');
+  if (extra && to.getSheets().length > 1 && extra.getLastRow() === 0) to.deleteSheet(extra);
+  Logger.log('コピーした: ' + (done.join(', ') || 'なし'));
 }
