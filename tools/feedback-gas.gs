@@ -141,6 +141,7 @@ function doPost(e) {
         new Date(), d.ts || '', cleanName_(d.name), d.qid || '', d.vote || '', String(d.comment || '').slice(0, 200),
         d.level || '', d.phase || '', d.pos || '', String(d.device || '').slice(0, 20) /* 端末の種類（スマホ／タブレット／PC）。UA の生の文字列は送られてこない。列名は ua のまま */, joinList_(d.reasons, 200)
       ]));
+      updateBadlist_(d);   // 👎 なら badlist に追記（同じ name+qid は更新、👍 に変わったら削除）
     }
     return json_({ ok: true });
   } catch (err) {
@@ -250,4 +251,73 @@ function migrateUaToDevice() {
   }
   range.setValues(vals);
   Logger.log(n + ' 行を置きかえた');
+}
+
+// ---- badlist: 👎 が押された問題の一覧（1人×1問につき1行。送り直しは更新。あとで 👍 に変わっても消さない） ----
+var SITE_URL = 'https://koto-inc.github.io/soccer-drill';   // 問題ページへのリンク用
+var BADLIST = { name: 'badlist', header: ['最終更新', 'name', 'qid', '問題ページ', 'level', 'phase', 'pos', 'reasons', 'comment', 'ua'] };
+
+function badlistSheet_() {
+  var ss = getSpreadsheet_();
+  var sh = ss.getSheetByName(BADLIST.name);
+  if (!sh) {
+    sh = ss.insertSheet(BADLIST.name);
+    sh.appendRow(BADLIST.header);
+    sh.getRange(1, 1, 1, BADLIST.header.length).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function qurl_(qid) { var n = Number(qid) || 0; return n ? SITE_URL + '/q/' + ('000' + n).slice(-3) + '/' : ''; }
+function badlistRow_(d) {
+  return row_([
+    new Date(), cleanName_(d.name), Number(d.qid) || '', qurl_(d.qid), Number(d.level) || '', String(d.phase || '').slice(0, 30), String(d.pos || '').slice(0, 30),
+    joinList_(d.reasons, 200), String(d.comment || '').slice(0, 200), String(d.device || '').slice(0, 20)
+  ]);
+}
+// feedback 1件を badlist に反映する。vote が 'bad' のときだけ: 同じ name+qid の行があれば更新、なければ追記（'good' では何もしない）
+function updateBadlist_(d) {
+  var name = cleanName_(d.name), qid = Number(d.qid) || 0;
+  if (!qid || d.vote !== 'bad') return;
+  var sh = badlistSheet_();
+  var found = 0;
+  if (sh.getLastRow() >= 2) {
+    var vals = sh.getRange(2, 2, sh.getLastRow() - 1, 2).getValues();   // name, qid
+    for (var i = 0; i < vals.length; i++) {
+      if (cleanName_(vals[i][0]) === name && Number(vals[i][1]) === qid) { found = i + 2; break; }
+    }
+  }
+  var row = badlistRow_(d);
+  if (found) sh.getRange(found, 1, 1, row.length).setValues([row]);
+  else sh.appendRow(row);
+}
+// ---- 1回だけ手で実行する: feedback シートの過去の行から badlist を作り直す ----
+// Apps Script エディタで rebuildBadlist を選んで「実行」。既存の badlist の中身は消して、feedback で一度でも 👎 が押された name+qid を並べる（同じ組み合わせは、いちばん下の 👎 の行の内容）
+function rebuildBadlist() {
+  var ss = getSpreadsheet_();
+  var fb = ss.getSheetByName(SHEETS.feedback.name);
+  if (!fb || fb.getLastRow() < 2) { Logger.log('feedback シートに行がありません'); return; }
+  var header = fb.getRange(1, 1, 1, fb.getLastColumn()).getValues()[0].map(String);
+  var c = function (k) { return header.indexOf(k); };
+  var rows = fb.getRange(2, 1, fb.getLastRow() - 1, fb.getLastColumn()).getValues();
+  var latest = {};   // name|qid -> いちばん下の 👎 の行
+  rows.forEach(function (r) {
+    var name = cleanName_(r[c('name')]), qid = Number(r[c('qid')]) || 0;
+    if (!name || !qid || String(r[c('vote')]) !== 'bad') return;
+    latest[name + '|' + qid] = r;
+  });
+  var out = [];
+  Object.keys(latest).forEach(function (k) {
+    var r = latest[k];
+    var when = r[0] instanceof Date ? r[0] : new Date();
+    var row = badlistRow_({ name: r[c('name')], qid: r[c('qid')], level: r[c('level')], phase: r[c('phase')], pos: r[c('pos')],
+      reasons: c('reasons') >= 0 ? String(r[c('reasons')] || '') : '', comment: r[c('comment')], device: c('ua') >= 0 ? r[c('ua')] : '' });
+    row[0] = when;
+    out.push(row);
+  });
+  out.sort(function (a, b) { return (Number(a[2]) || 0) - (Number(b[2]) || 0) || (a[0] - b[0]); });   // 問題番号順
+  var sh = badlistSheet_();
+  if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
+  if (out.length) sh.getRange(2, 1, out.length, BADLIST.header.length).setValues(out);
+  Logger.log(out.length + ' 件を badlist に並べた');
 }
