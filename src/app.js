@@ -8,13 +8,14 @@
 (function(){
   'use strict';
   var CFG=window.PD_CONFIG||{};
-  var CH=CFG.challenge||{count:7,timeLimit:{},bands:[0,3,5,7],rankTable:{},msg:'つぎは{next}をねらおう！',msgTop:'パーフェクト！'};
+  var CH=CFG.challenge||{count:7,perQuestionSec:30,timePenalty:0.5,ngScore:-0.5,bands:[0,3,5,7],rankTable:{},msg:'つぎは{next}をねらおう！',msgTop:'パーフェクト！'};
+  var QSEC=Number(CH.perQuestionSec)||30, TPEN=Number(CH.timePenalty)||0.5;   // 1問の目標タイム（秒）と、超えたときにひく点
   var RANKS=CFG.ranks||[];
   var LVN=CFG.levelNames||{1:'入門',2:'中級',3:'上級'};
   var KEYS=['ア','イ','ウ','エ','オ'];
   var BASE=CFG.base||'';
   var MARK={ok:'◎',partial:'○',ng:'×'};
-  var SCORE={ok:1,partial:0.5,ng:0};
+  var SCORE={ok:1,partial:0.5,ng:(typeof CH.ngScore==='number'?CH.ngScore:-0.5)};
 
   function lsGet(k,def){ try{ var v=localStorage.getItem(k); return v==null?def:JSON.parse(v); }catch(e){ return def; } }
   function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
@@ -159,14 +160,12 @@
   function bandIndex(score){ var b=CH.bands||[0]; var i=0; for(var k=0;k<b.length;k++){ if(score>=b[k]) i=k; } return i; }
   function rankOf(level,score,timeSec){
     var table=(CH.rankTable&&CH.rankTable[level])||[0,1,2,3];
+    // ランクは合計点だけで決める（タイムは1問ごとに点からひいてあるので、ここでは見ない）
     var idx=table[Math.min(bandIndex(score),table.length-1)];
-    var limit=CH.timeLimit&&CH.timeLimit[level];
-    var over=!!(limit&&timeSec>limit);
-    if(over) idx=Math.max(idx-1,table[0]);
     var r=RANKS[idx]||{emoji:'',name:''};
     var next=RANKS[idx+1];
     var msg=next?String(CH.msg||'').replace('{next}',next.name):(CH.msgTop||'');
-    return {idx:idx,emoji:r.emoji,name:r.name,msg:msg,over:over,limit:limit};
+    return {idx:idx,emoji:r.emoji,name:r.name,msg:msg};
   }
 
   /* ===== レベル別チャレンジ（進行は sessionStorage 'pd-ch'） =====
@@ -336,9 +335,13 @@
     if(ch){
       var spent=ch.results.reduce(function(s,r){return s+(r.time||0);},0);
       document.querySelectorAll('.catname').forEach(function(el){ el.textContent=LVN[ch.level]+'チャレンジ'; });
+      // この問題にかかっている秒数を出す（1問 QSEC 秒をこえると −TPEN 点）
       var tick=function(){
-        var t=spent+(Date.now()-startedAt)/1000;
-        document.querySelectorAll('.qpos').forEach(function(el){ el.textContent=(chPos+1)+' / '+ch.ids.length+'　⏱ '+mmss(t); });
+        var s=Math.floor((Date.now()-startedAt)/1000);
+        document.querySelectorAll('.qpos').forEach(function(el){
+          el.textContent=(chPos+1)+' / '+ch.ids.length+'　⏱ '+s+'秒'+(s>QSEC?'（'+QSEC+'秒をこえた −'+TPEN+'点）':'／'+QSEC+'秒');
+          el.classList.toggle('late',s>QSEC);
+        });
       };
       tick(); timerId=setInterval(tick,1000);
       skipLinks.forEach(function(a){ a.hidden=true; });
@@ -397,8 +400,13 @@
       // チャレンジの採点とタイムを記録
       if(ch){
         var cur=ssGet('pd-ch');
-        if(cur&&cur.results.length===chPos){ cur.results.push({id:id,title:root.getAttribute('data-title')||'',cls:cls,score:SCORE[cls],time:Math.round(elapsed*10)/10}); ssSet('pd-ch',cur); }
-        document.querySelectorAll('.qpos').forEach(function(el){ el.textContent=(chPos+1)+' / '+ch.ids.length+'　⏱ '+mmss(spent+elapsed); });
+        var late=elapsed>QSEC;   // 1問の目標タイムをこえたら −TPEN 点
+        var qscore=SCORE[cls]-(late?TPEN:0);
+        if(cur&&cur.results.length===chPos){ cur.results.push({id:id,title:root.getAttribute('data-title')||'',cls:cls,base:SCORE[cls],late:late,score:qscore,time:Math.round(elapsed*10)/10}); ssSet('pd-ch',cur); }
+        document.querySelectorAll('.qpos').forEach(function(el){
+          el.textContent=(chPos+1)+' / '+ch.ids.length+'　⏱ '+Math.floor(elapsed)+'秒'+(late?'（'+QSEC+'秒をこえた −'+TPEN+'点）':'')+'　この問題 '+fmtScore(qscore)+'点';
+          el.classList.toggle('late',late);
+        });
       }
       var r=document.getElementById('result');
       r.className='result '+cls;
@@ -436,8 +444,10 @@
       return;
     }
     var level=ch.level;
-    var total=ch.results.reduce(function(s,r){return s+r.score;},0);
+    var raw=ch.results.reduce(function(s,r){return s+r.score;},0);
+    var total=Math.max(0,Math.round(raw*10)/10);   // 合計がマイナスなら 0 点
     var time=ch.results.reduce(function(s,r){return s+(r.time||0);},0);
+    var lateN=ch.results.filter(function(r){return r.late;}).length;
     var r=rankOf(level,total,time);
     var best=lsGet(nk('best'),{});
     var prev=best[level];
@@ -446,13 +456,12 @@
     // 結果をスプレッドシートへ（同じ結果はリロードしても1回だけ送る）
     if(CFG.feedback&&!ch.sent){
       ch.sent=true; ssSet('pd-ch',ch);
-      post({type:'result',name:NAME,level:level,score:total,timeSec:Math.round(time),rank:r.name,rankIdx:r.idx,cleared:!r.over,
+      post({type:'result',name:NAME,level:level,score:total,timeSec:Math.round(time),rank:r.name,rankIdx:r.idx,cleared:lateN===0,
         qids:ch.ids.map(Number),marks:ch.results.map(function(x){ return MARK[x.cls]; }).join(''),ts:new Date().toISOString()});
     }
-    var timeLine = r.limit
-      ? (r.over ? '<p class="chtime over">⏱ タイム '+mmss(time)+' ／ もくひょう '+mmss(r.limit)+'<br><b>もくひょうタイムをすぎたので、ランク1つダウン</b></p>'
-                : '<p class="chtime ok">⏱ タイム '+mmss(time)+' ／ もくひょう '+mmss(r.limit)+'　<b>クリア！</b></p>')
-      : '<p class="chtime">⏱ タイム '+mmss(time)+'</p>';
+    var timeLine = lateN
+      ? '<p class="chtime over">⏱ タイム '+mmss(time)+'　'+QSEC+'秒をこえた問題 '+lateN+'問（−'+fmtScore(lateN*TPEN)+'点）</p>'
+      : '<p class="chtime ok">⏱ タイム '+mmss(time)+'　全部 '+QSEC+'秒いない！</p>';
     var pr=prev?rankOf(level,Number(prev.score)||0,Number(prev.time)||0):null;
     el.innerHTML=
       '<div class="card chres">'+
@@ -467,9 +476,9 @@
           :'<button class="primary big" type="button" id="btnRank">🏆 ランキングにとうろくする</button><p class="hint">「'+esc(NAME)+'」のなまえで、TOP のランキングにのるよ。</p>')+'</div>':'')+
       '</div>'+
       '<div class="card">'+
-        '<p class="hint" style="margin-bottom:10px">◎=1点、○=0.5点、×=0点。タップすると、その問題をもう一度見られる。</p>'+
+        '<p class="hint" style="margin-bottom:10px">◎=1点、○=0.5点、×=−0.5点。1問'+QSEC+'秒をこえると −'+fmtScore(TPEN)+'点。タップすると、その問題をもう一度見られる。</p>'+
         '<div class="list">'+ch.results.map(function(x,i){
-          return '<a class="item" href="'+qurl(x.id)+'"><span class="n"><span class="mk '+x.cls+'">'+MARK[x.cls]+'</span><br>'+(i+1)+'</span><span class="t">'+esc(x.title)+'<small>Q'+esc(x.id)+'・'+fmtScore(x.score)+'点・'+mmss(x.time||0)+'</small></span></a>';
+          return '<a class="item" href="'+qurl(x.id)+'"><span class="n"><span class="mk '+x.cls+'">'+MARK[x.cls]+'</span><br>'+(i+1)+'</span><span class="t">'+esc(x.title)+'<small>Q'+esc(x.id)+'・'+fmtScore(x.score)+'点・'+Math.round(x.time||0)+'秒'+(x.late?'（'+QSEC+'秒をこえた −'+fmtScore(TPEN)+'）':'')+'</small></span></a>';
         }).join('')+'</div>'+
       '</div>'+
       '<div class="actions"><button class="primary big" type="button" data-start-challenge="'+level+'">もう一度</button><button type="button" id="btnOtherLevel">べつのレベルをやる</button><a class="btn" href="'+BASE+'/">TOPへ</a></div>';

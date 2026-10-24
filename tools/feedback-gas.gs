@@ -18,7 +18,7 @@
  * ---- doPost（サイト側は navigator.sendBeacon(url, Blob(JSON文字列, 'text/plain'))。使えなければ fetch POST no-cors keepalive）----
  *   type:'feedback' { type, name, qid, vote:'good'|'bad', comment, reasons:[👎の理由チップの文字列], level, phase, pos, ua, ts }
  *                                                                                                  → 'feedback' シート
- *   type:'result'   { type, name, level:1|2|3, score, timeSec, rank(ランク名), rankIdx, cleared(目標タイム内なら true),
+ *   type:'result'   { type, name, level:1|2|3, score, timeSec, rank(ランク名), rankIdx, cleared(30秒をこえた問題が1つも無ければ true),
  *                     qids:[出た問題のID], marks:'◎○×…'(問題数ぶんの文字), ts }                   → 'results' シート
  *   type:'answer'   { type, name, qid, level, phase, pos, picked:[押した選択肢の添字 0〜4], correct:[正解の添字],
  *                     result:'ok'|'partial'|'ng', timeSec(問題表示→答え合わせ), attempt(同じ問題で何回目か),
@@ -83,7 +83,7 @@ function cell_(s) { s = String(s == null ? '' : s); return /^[=+\-@]/.test(s) ? 
 // サイトから送られた key が API_KEY と同じか（API_KEY が空なら照合しない）
 function keyOk_(k) { return !API_KEY || String(k || '') === API_KEY; }
 function cleanName_(s) { return cell_(String(s || '').replace(/\s+/g, ' ').trim().slice(0, 12)); }
-function scoreOfMarks_(marks) { var s = 0; for (var i = 0; i < marks.length; i++) { if (marks[i] === '◎') s += 1; else if (marks[i] === '○') s += 0.5; } return s; }
+function scoreOfMarks_(marks) { var s = 0; for (var i = 0; i < marks.length; i++) { if (marks[i] === '◎') s += 1; else if (marks[i] === '○') s += 0.5; else if (marks[i] === '×') s -= 0.5; } return Math.max(0, s); }   // ×=-0.5。1問ごとの時間ペナルティはシートに無いので入れられない
 // 問題数を変える前の記録を、今の問題数に合わせる。marks（◎○×の列）があれば最初の CHALLENGE_COUNT 問で計算し直し、
 // 無ければ点とタイムを問題数の比で縮める（点は 0.5 きざみに切り捨て）
 function adjust_(score, time, marks) {
