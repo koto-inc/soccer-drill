@@ -20,7 +20,8 @@
  *
  * ---- doPost（サイト側は navigator.sendBeacon(url, Blob(JSON文字列, 'text/plain'))。使えなければ fetch POST no-cors keepalive）----
  *   すべての送信に key を含める（site.config.mjs の FEEDBACK_KEY）。
- *   type:'feedback' { type, key, name, qid, vote:'good'|'bad', comment, reasons:[👎の理由チップの文字列], level, phase, pos, device('スマホ'|'タブレット'|'PC'。ua 列に入る), pressTs(👍👎 を押した時刻。送り直しでは変わらない), ts }
+ *   type:'feedback' { type, key, name, qid, vote:'good'|'bad', comment, reasons:[👎の理由チップの文字列], level, phase, pos, device('スマホ'|'タブレット'|'PC'。ua 列に入る), pressTs(👍👎 を押した時刻。送り直しでは変わらない),
+ *                     picked/correct/result/timeSec(👎 を押したときの、その問題の答え。シートでは記号・大文字), ts }
  *                                                                                                  → 'feedback' シート
  *   type:'result'   { type, key, name, level:1|2|3, score(7点満点。1問 ＝ 正解のぶん − 0.5×まちがいの数 − 30秒超過0.5、下限0), timeSec, rank(ランク名), rankIdx, cleared(30秒をこえた問題が1つも無ければ true),
  *                     qids:[出た問題のID], marks:'◎○×…'(問題数ぶんの文字), ts }                   → 'results' シート
@@ -50,7 +51,7 @@ var API_KEY = 'uiJU7xMjpPRvn2oYnakg';
 var SPREADSHEET_ID = '1UuAX2vNxlX5qw1t5MUyPKB52Tl9fp59Z5gY7KJXVsN0';
 
 var SHEETS = {
-  feedback: { name: 'feedback', header: ['受信日時', 'ts(端末)', 'name', 'qid', 'vote', 'comment', 'level', 'phase', 'pos', 'ua', 'reasons', 'pressTs'] },
+  feedback: { name: 'feedback', header: ['受信日時', 'ts(端末)', 'name', 'qid', 'vote', 'comment', 'level', 'phase', 'pos', 'ua', 'reasons', 'pressTs', 'picked', 'correct', 'result', 'timeSec'] },
   result:   { name: 'results',  header: ['受信日時', 'ts(端末)', 'name', 'level', 'score', 'timeSec', 'rank', 'rankIdx', 'cleared', 'qids', 'marks'] },
   answer:   { name: 'answers',  header: ['受信日時', 'ts(端末)', 'name', 'qid', 'level', 'phase', 'pos', 'picked', 'correct', '正解数', '不正解数', 'result', '時間超過', 'timeSec', '得点', 'attempt', 'mode'] },
   rank:     { name: 'ranking',  header: ['受信日時', 'ts(端末)', 'name', 'level', 'score', 'timeSec', 'rank', 'rankIdx'] },
@@ -143,7 +144,8 @@ function doPost(e) {
       sh.appendRow(row_([
         new Date(), d.ts || '', cleanName_(d.name), d.qid || '', d.vote || '', String(d.comment || '').slice(0, 200),
         d.level || '', d.phase || '', d.pos || '', String(d.device || '').slice(0, 20) /* 端末の種類（スマホ／タブレット／PC）。UA の生の文字列は送られてこない。列名は ua のまま */, joinList_(d.reasons, 200),
-        String(d.pressTs || '').slice(0, 40)   // 押した時刻（送り直しでは変わらない）
+        String(d.pressTs || '').slice(0, 40),   // 押した時刻（送り直しでは変わらない）
+        letters_(d.picked), letters_(d.correct), String(d.result || '').toUpperCase().slice(0, 10), (d.timeSec === '' || d.timeSec == null) ? '' : Number(d.timeSec) || 0   // 👎 を押したときの答え（選んだ記号・正解・判定・秒数）
       ]));
       updateBadlist_(d);   // 👎 なら badlist に追記（同じ押下＝name+qid+pressTs は更新。別の押下は別の行。👍 に変わっても消さない）
     }
@@ -226,7 +228,7 @@ function ranking_() {
 
 // ---- badlist: 👎 が押された一覧（1回の押下につき1行。チップや一言を足した送り直しは同じ行を更新。2回押せば2行。あとで 👍 に変わっても消さない） ----
 var SITE_URL = 'https://koto-inc.github.io/soccer-drill';   // 問題ページへのリンク用
-var BADLIST = { name: 'badlist', header: ['最終更新', 'name', 'qid', '問題ページ', 'level', 'phase', 'pos', 'reasons', 'comment', 'ua', 'pressTs'] };
+var BADLIST = { name: 'badlist', header: ['最終更新', 'name', 'qid', '問題ページ', 'level', 'phase', 'pos', 'reasons', 'comment', 'ua', 'pressTs', 'picked', 'correct', 'result', 'timeSec'] };
 
 function badlistSheet_() {
   var ss = getSpreadsheet_();
@@ -248,7 +250,8 @@ function qurl_(qid) { var n = Number(qid) || 0; return n ? SITE_URL + '/q/' + ('
 function badlistRow_(d) {
   return row_([
     new Date(), cleanName_(d.name), Number(d.qid) || '', qurl_(d.qid), Number(d.level) || '', String(d.phase || '').slice(0, 30), String(d.pos || '').slice(0, 30),
-    joinList_(d.reasons, 200), String(d.comment || '').slice(0, 200), String(d.device || '').slice(0, 20), String(d.pressTs || '').slice(0, 40)
+    joinList_(d.reasons, 200), String(d.comment || '').slice(0, 200), String(d.device || '').slice(0, 20), String(d.pressTs || '').slice(0, 40),
+    letters_(d.picked), letters_(d.correct), String(d.result || '').toUpperCase().slice(0, 10), (d.timeSec === '' || d.timeSec == null) ? '' : Number(d.timeSec) || 0
   ]);
 }
 // feedback 1件を badlist に反映する。vote が 'bad' のときだけ:
@@ -299,7 +302,8 @@ function rebuildBadlist() {
     var when = r[0] instanceof Date ? r[0] : new Date();
     var row = badlistRow_({ name: r[c('name')], qid: r[c('qid')], level: r[c('level')], phase: r[c('phase')], pos: r[c('pos')],
       reasons: c('reasons') >= 0 ? String(r[c('reasons')] || '') : '', comment: r[c('comment')], device: c('ua') >= 0 ? r[c('ua')] : '',
-      pressTs: c('pressTs') >= 0 ? r[c('pressTs')] : '' });
+      pressTs: c('pressTs') >= 0 ? r[c('pressTs')] : '',
+      picked: c('picked') >= 0 ? r[c('picked')] : '', correct: c('correct') >= 0 ? r[c('correct')] : '', result: c('result') >= 0 ? r[c('result')] : '', timeSec: c('timeSec') >= 0 ? r[c('timeSec')] : '' });
     row[0] = when;
     out.push(row);
   });

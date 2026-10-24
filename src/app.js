@@ -11,6 +11,7 @@
   var CH=CFG.challenge||{count:7,perQuestionSec:30,timePenalty:0.5,missPenalty:0.5,bands:[0,3,5,7],rankTable:{},msg:'つぎは{next}をねらおう！',msgTop:'パーフェクト！'};
   var QSEC=Number(CH.perQuestionSec)||30, TPEN=Number(CH.timePenalty)||0.5;   // 1問の目標タイム（秒）と、超えたときにひく点
   var MPEN=(typeof CH.missPenalty==='number')?CH.missPenalty:0.5;   // まちがいを1つ選ぶごとにひく点
+  var LAST_ANSWER=null;   // このページで最後に答え合わせした内容（👍👎 の送信に picked/correct/result/timeSec を付けるため）
   var RANKS=CFG.ranks||[];
   var LVN=CFG.levelNames||{1:'入門',2:'中級',3:'上級'};
   var KEYS=['ア','イ','ウ','エ','オ'];
@@ -304,6 +305,7 @@
       all[id]={type:'feedback',name:NAME,qid:Number(id),vote:vote,comment:(input.value||'').trim().slice(0,100),
         reasons:vote==='bad'?pickedReasons():[],
         level:Number(root.getAttribute('data-level')),phase:root.getAttribute('data-phase'),pos:root.getAttribute('data-pos'),
+        picked:LAST_ANSWER?LAST_ANSWER.picked:[],correct:LAST_ANSWER?LAST_ANSWER.correct:[],result:LAST_ANSWER?LAST_ANSWER.result:'',timeSec:LAST_ANSWER?LAST_ANSWER.timeSec:'',
         device:deviceType(),pressTs:pressTs,ts:new Date().toISOString()};
       lsSet(nk("fb"),all);   // 1問につき1件（送り直しは上書き）
       schedule();
@@ -420,6 +422,7 @@
       var lateLog=tSec>QSEC;
       var baseLog=hit===correct.length?1:(hit>0?0.5:0);
       var scoreLog=Math.max(0,Math.round((baseLog-miss*MPEN-(lateLog?TPEN:0))*10)/10);
+      LAST_ANSWER={picked:picked.slice(),correct:correct.slice(),result:cls,timeSec:tSec};
       post({type:'answer',name:NAME,qid:Number(id),level:Number(root.getAttribute('data-level')),phase:root.getAttribute('data-phase'),pos:root.getAttribute('data-pos'),
         picked:picked.slice(),correct:correct,hit:hit,miss:miss,result:cls,timeSec:tSec,late:lateLog,score:scoreLog,attempt:tries[id],
         mode:ch?'challenge':'practice',ts:new Date().toISOString()});
