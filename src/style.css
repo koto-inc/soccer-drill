@@ -257,7 +257,14 @@ button.big,.btn.big{font-size:18px;padding:14px 22px;border-radius:14px}
 }
 .qpos.late{color:var(--ng)}
 .ranktbl{width:100%;border-collapse:collapse;font-size:12px;margin:0 0 10px;table-layout:fixed}
-.ranktbl th,.ranktbl td{border:1px solid var(--line);padding:4px 3px;text-align:center;line-height:1.3;word-break:keep-all}
+.ranktbl th,.ranktbl td{border:1px solid var(--line);padding:4px 3px;text-align:center;line-height:1.3;word-break:break-all;overflow-wrap:anywhere}
+.ranktbl .re{margin-right:2px}
+@media (max-width:480px){
+  .ranktbl{font-size:11px}
+  .ranktbl th,.ranktbl td{padding:4px 2px}
+  .ranktbl tbody th{width:3.6em;font-size:10px}
+  .ranktbl .re{display:block;margin:0;font-size:14px;line-height:1.1}
+}
 .ranktbl thead th{background:var(--accent-soft);color:var(--accent);font-weight:800}
 .ranktbl tbody th{background:var(--bg);font-weight:800;white-space:nowrap;width:4.5em}
 .ranktbl tbody tr:last-child td{background:#fff1d6;color:#9a5b00;font-weight:800}
