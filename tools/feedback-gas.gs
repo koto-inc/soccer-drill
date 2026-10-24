@@ -4,7 +4,7 @@
  *   - チャレンジ結果の記録（doPost, type:'result' → シート 'results'）
  *   - 1問ごとの答えログ（doPost, type:'answer' → シート 'answers'。問題を直すためのデータ。doGet では返さない）
  *   - 名前ごとのレベル別ベスト（doGet ?name=... → JSON）、ランキング（doGet ?ranking=1 → JSON）
- *   - 👎 の一覧（feedback の 👎 を シート 'badlist' にも1人×1問で1行。手で rebuildBadlist を実行すると過去分から作り直せる）
+ *   - 👎 の一覧（feedback の 👎 を シート 'badlist' にも押下ごとに1行。手で rebuildBadlist を実行すると過去分から作り直せる）
  *   - 送信・取得のすべてに key（API_KEY と同じ文字列）が必要。違えば {ok:false,error:'forbidden'}
  *   - セルに書く文字列の先頭が = + - @ なら空白を足して、数式として実行されないようにする
  *
@@ -20,7 +20,7 @@
  *
  * ---- doPost（サイト側は navigator.sendBeacon(url, Blob(JSON文字列, 'text/plain'))。使えなければ fetch POST no-cors keepalive）----
  *   すべての送信に key を含める（site.config.mjs の FEEDBACK_KEY）。
- *   type:'feedback' { type, key, name, qid, vote:'good'|'bad', comment, reasons:[👎の理由チップの文字列], level, phase, pos, device('スマホ'|'タブレット'|'PC'。ua 列に入る), ts }
+ *   type:'feedback' { type, key, name, qid, vote:'good'|'bad', comment, reasons:[👎の理由チップの文字列], level, phase, pos, device('スマホ'|'タブレット'|'PC'。ua 列に入る), pressTs(👍👎 を押した時刻。送り直しでは変わらない), ts }
  *                                                                                                  → 'feedback' シート
  *   type:'result'   { type, key, name, level:1|2|3, score(7点満点。1問 ＝ 正解のぶん − 0.5×まちがいの数 − 30秒超過0.5、下限0), timeSec, rank(ランク名), rankIdx, cleared(30秒をこえた問題が1つも無ければ true),
  *                     qids:[出た問題のID], marks:'◎○×…'(問題数ぶんの文字), ts }                   → 'results' シート
@@ -30,7 +30,7 @@
  *   type:'rank'     { type, key, name, level, score, timeSec, rank, rankIdx, ts }（結果ページで「ランキングにとうろく」を押したとき）
  *                                                                                                  → 'ranking' シート
  *   type が無いものは feedback として扱う（古いサイトからの送信）。返事: {ok:true} / {ok:false,error}
- *   feedback は同じ name+qid の行が複数来ることがある（👎 のあとに理由チップを足すと送り直す）→ いちばん下の行が最新。👎 は badlist にも反映（同じ name+qid は更新、👍 に変わっても消さない）
+ *   feedback は同じ name+qid の行が複数来ることがある（👎 のあとに理由チップを足すと送り直す）→ いちばん下の行が最新。👎 は badlist にも反映（同じ押下＝name+qid+pressTs は更新、別の押下は別の行、👍 に変わっても消さない）
  *   ヘッダーは足りない列（例: 古い feedback シートの 'reasons'）を末尾に書き足すだけで、既存の列は動かさない
  *
  * ---- doGet（サイト側は fetch(url + '?name=' + encodeURIComponent(name) + '&key=' + key) → JSON。key が無いか違えば forbidden）----
@@ -47,7 +47,7 @@ var API_KEY = 'uiJU7xMjpPRvn2oYnakg';
 var SPREADSHEET_ID = '1UuAX2vNxlX5qw1t5MUyPKB52Tl9fp59Z5gY7KJXVsN0';
 
 var SHEETS = {
-  feedback: { name: 'feedback', header: ['受信日時', 'ts(端末)', 'name', 'qid', 'vote', 'comment', 'level', 'phase', 'pos', 'ua', 'reasons'] },
+  feedback: { name: 'feedback', header: ['受信日時', 'ts(端末)', 'name', 'qid', 'vote', 'comment', 'level', 'phase', 'pos', 'ua', 'reasons', 'pressTs'] },
   result:   { name: 'results',  header: ['受信日時', 'ts(端末)', 'name', 'level', 'score', 'timeSec', 'rank', 'rankIdx', 'cleared', 'qids', 'marks'] },
   answer:   { name: 'answers',  header: ['受信日時', 'ts(端末)', 'name', 'qid', 'level', 'phase', 'pos', 'picked', 'correct', 'result', 'timeSec', 'attempt', 'mode'] },
   rank:     { name: 'ranking',  header: ['受信日時', 'ts(端末)', 'name', 'level', 'score', 'timeSec', 'rank', 'rankIdx'] },
@@ -143,9 +143,10 @@ function doPost(e) {
     } else {
       sh.appendRow(row_([
         new Date(), d.ts || '', cleanName_(d.name), d.qid || '', d.vote || '', String(d.comment || '').slice(0, 200),
-        d.level || '', d.phase || '', d.pos || '', String(d.device || '').slice(0, 20) /* 端末の種類（スマホ／タブレット／PC）。UA の生の文字列は送られてこない。列名は ua のまま */, joinList_(d.reasons, 200)
+        d.level || '', d.phase || '', d.pos || '', String(d.device || '').slice(0, 20) /* 端末の種類（スマホ／タブレット／PC）。UA の生の文字列は送られてこない。列名は ua のまま */, joinList_(d.reasons, 200),
+        String(d.pressTs || '').slice(0, 40)   // 押した時刻（送り直しでは変わらない）
       ]));
-      updateBadlist_(d);   // 👎 なら badlist に追記（同じ name+qid は更新。👍 に変わっても消さない）
+      updateBadlist_(d);   // 👎 なら badlist に追記（同じ押下＝name+qid+pressTs は更新。別の押下は別の行。👍 に変わっても消さない）
     }
     return json_({ ok: true });
   } catch (err) {
@@ -224,9 +225,9 @@ function ranking_() {
   return out;
 }
 
-// ---- badlist: 👎 が押された問題の一覧（1人×1問につき1行。送り直しは更新。あとで 👍 に変わっても消さない） ----
+// ---- badlist: 👎 が押された一覧（1回の押下につき1行。チップや一言を足した送り直しは同じ行を更新。2回押せば2行。あとで 👍 に変わっても消さない） ----
 var SITE_URL = 'https://koto-inc.github.io/soccer-drill';   // 問題ページへのリンク用
-var BADLIST = { name: 'badlist', header: ['最終更新', 'name', 'qid', '問題ページ', 'level', 'phase', 'pos', 'reasons', 'comment', 'ua'] };
+var BADLIST = { name: 'badlist', header: ['最終更新', 'name', 'qid', '問題ページ', 'level', 'phase', 'pos', 'reasons', 'comment', 'ua', 'pressTs'] };
 
 function badlistSheet_() {
   var ss = getSpreadsheet_();
@@ -236,6 +237,11 @@ function badlistSheet_() {
     sh.appendRow(BADLIST.header);
     sh.getRange(1, 1, 1, BADLIST.header.length).setFontWeight('bold');
     sh.setFrozenRows(1);
+  } else if (sh.getLastColumn() < BADLIST.header.length) {
+    // 列が増えたとき（例: 'pressTs'）: 足りないヘッダーだけ末尾に書き足す
+    var from = sh.getLastColumn();
+    var add = BADLIST.header.slice(from);
+    sh.getRange(1, from + 1, 1, add.length).setValues([add]).setFontWeight('bold');
   }
   return sh;
 }
@@ -243,19 +249,25 @@ function qurl_(qid) { var n = Number(qid) || 0; return n ? SITE_URL + '/q/' + ('
 function badlistRow_(d) {
   return row_([
     new Date(), cleanName_(d.name), Number(d.qid) || '', qurl_(d.qid), Number(d.level) || '', String(d.phase || '').slice(0, 30), String(d.pos || '').slice(0, 30),
-    joinList_(d.reasons, 200), String(d.comment || '').slice(0, 200), String(d.device || '').slice(0, 20)
+    joinList_(d.reasons, 200), String(d.comment || '').slice(0, 200), String(d.device || '').slice(0, 20), String(d.pressTs || '').slice(0, 40)
   ]);
 }
-// feedback 1件を badlist に反映する。vote が 'bad' のときだけ: 同じ name+qid の行があれば更新、なければ追記（'good' では何もしない）
+// feedback 1件を badlist に反映する。vote が 'bad' のときだけ:
+//   同じ押下（name+qid+pressTs が同じ）の行があれば更新、なければ追記。pressTs が無い古い送信は name+qid だけで同じ押下とみなす
 function updateBadlist_(d) {
-  var name = cleanName_(d.name), qid = Number(d.qid) || 0;
+  var name = cleanName_(d.name), qid = Number(d.qid) || 0, pressTs = String(d.pressTs || '');
   if (!qid || d.vote !== 'bad') return;
   var sh = badlistSheet_();
   var found = 0;
   if (sh.getLastRow() >= 2) {
-    var vals = sh.getRange(2, 2, sh.getLastRow() - 1, 2).getValues();   // name, qid
+    var header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+    var cp = header.indexOf('pressTs');
+    var vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
     for (var i = 0; i < vals.length; i++) {
-      if (cleanName_(vals[i][0]) === name && Number(vals[i][1]) === qid) { found = i + 2; break; }
+      var r = vals[i];
+      if (cleanName_(r[1]) !== name || Number(r[2]) !== qid) continue;
+      var p = cp >= 0 ? String(r[cp] || '') : '';
+      if (p === pressTs) { found = i + 2; break; }
     }
   }
   var row = badlistRow_(d);
@@ -264,7 +276,8 @@ function updateBadlist_(d) {
 }
 // ---- 必要なときに手で実行する（何度でも可）: feedback シートの過去の行から badlist を作り直す ----
 // 普段は doPost が 👎 のたびに自動で追記するので不要。過去分を取り込むとき、行を消してしまったとき、並べ方を変えたときに使う。badlist に手で書いたメモは消えるので注意
-// Apps Script エディタで rebuildBadlist を選んで「実行」。既存の badlist の中身は消して、feedback で一度でも 👎 が押された name+qid を並べる（同じ組み合わせは、いちばん下の 👎 の行の内容）
+// Apps Script エディタで rebuildBadlist を選んで「実行」。既存の badlist の中身は消して、feedback の 👎 を押下ごと（name+qid+pressTs）に1行で並べる
+// （同じ押下の送り直しは、いちばん下の行の内容。pressTs が無い古い行は name+qid で1つの押下とみなす）
 function rebuildBadlist() {
   var ss = getSpreadsheet_();
   var fb = ss.getSheetByName(SHEETS.feedback.name);
@@ -272,18 +285,22 @@ function rebuildBadlist() {
   var header = fb.getRange(1, 1, 1, fb.getLastColumn()).getValues()[0].map(String);
   var c = function (k) { return header.indexOf(k); };
   var rows = fb.getRange(2, 1, fb.getLastRow() - 1, fb.getLastColumn()).getValues();
-  var latest = {};   // name|qid -> いちばん下の 👎 の行
+  var latest = {}, order = [];   // name|qid|pressTs -> その押下のいちばん下の 👎 の行
   rows.forEach(function (r) {
     var name = cleanName_(r[c('name')]), qid = Number(r[c('qid')]) || 0;
     if (!name || !qid || String(r[c('vote')]) !== 'bad') return;
-    latest[name + '|' + qid] = r;
+    var pressTs = c('pressTs') >= 0 ? String(r[c('pressTs')] || '') : '';
+    var k = name + '|' + qid + '|' + pressTs;
+    if (!latest[k]) order.push(k);
+    latest[k] = r;
   });
   var out = [];
-  Object.keys(latest).forEach(function (k) {
+  order.forEach(function (k) {
     var r = latest[k];
     var when = r[0] instanceof Date ? r[0] : new Date();
     var row = badlistRow_({ name: r[c('name')], qid: r[c('qid')], level: r[c('level')], phase: r[c('phase')], pos: r[c('pos')],
-      reasons: c('reasons') >= 0 ? String(r[c('reasons')] || '') : '', comment: r[c('comment')], device: c('ua') >= 0 ? r[c('ua')] : '' });
+      reasons: c('reasons') >= 0 ? String(r[c('reasons')] || '') : '', comment: r[c('comment')], device: c('ua') >= 0 ? r[c('ua')] : '',
+      pressTs: c('pressTs') >= 0 ? r[c('pressTs')] : '' });
     row[0] = when;
     out.push(row);
   });

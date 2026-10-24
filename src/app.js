@@ -295,11 +295,16 @@
       if(reasonsBox) reasonsBox.hidden=!(cur&&cur.vote==='bad');
       done.hidden=!cur;
     }
-    function save(vote){
+    // pressTs = 👍👎 を押した時刻。チップや一言を足した送り直しでは変えない（受け口の badlist は name+qid+pressTs で1行にする）。
+    // このページを開いてから最初の押下、または 👍⇄👎 を変えた押下は「新しい押下」として時刻を取り直す
+    var pressedThisLoad=false;
+    function save(vote,newPress){
+      var prev=all[id];
+      var pressTs=(prev&&prev.pressTs&&!newPress)?prev.pressTs:new Date().toISOString();
       all[id]={type:'feedback',name:NAME,qid:Number(id),vote:vote,comment:(input.value||'').trim().slice(0,100),
         reasons:vote==='bad'?pickedReasons():[],
         level:Number(root.getAttribute('data-level')),phase:root.getAttribute('data-phase'),pos:root.getAttribute('data-pos'),
-        device:deviceType(),ts:new Date().toISOString()};
+        device:deviceType(),pressTs:pressTs,ts:new Date().toISOString()};
       lsSet(nk("fb"),all);   // 1問につき1件（送り直しは上書き）
       schedule();
     }
@@ -310,7 +315,9 @@
     btns.forEach(function(b){
       b.addEventListener('click',function(){
         var vote=b.getAttribute('data-vote');
-        save(vote); render();
+        var newPress=!pressedThisLoad||!all[id]||all[id].vote!==vote;
+        pressedThisLoad=true;
+        save(vote,newPress); render();
         onVoted();
         if(window.gtag){ try{ gtag('event','feedback',{question_id:id,vote:vote}); }catch(e){} }
       });

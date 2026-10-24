@@ -198,7 +198,7 @@ localStorage のキー:
 送る JSON（POST、`type` で区別）:
 
 - `type:'feedback'` … `{ type, name, qid, vote:'good'|'bad', comment, reasons:['ことばがわからない', …], level, phase, pos, device（'スマホ'｜'タブレット'｜'PC'。シートでは ua 列に入る）, ts }` → **feedback** シート
-- 👎 のときは **badlist** シートにも1行（最終更新・name・qid・問題ページのURL・level/phase/pos・reasons・comment・ua）。同じ name+qid の送り直しは行を更新。あとで 👍 に変わっても消さない。過去の feedback から作り直すときは Apps Script エディタで `rebuildBadlist` を実行（何度でも可。badlist に手で書いたメモは消える）（一度でも 👎 が押された name+qid を、いちばん下の 👎 の内容で並べる）
+- 👎 のときは **badlist** シートにも1行（最終更新・name・qid・問題ページのURL・level/phase/pos・reasons・comment・ua・pressTs）。1回の押下につき1行で、チップや一言を足した送り直し（同じ `pressTs`）は行を更新、別の押下（同じ子が同じ問題でまた 👎）は別の行。あとで 👍 に変わっても消さない。過去の feedback から作り直すときは Apps Script エディタで `rebuildBadlist` を実行（何度でも可。badlist に手で書いたメモは消える）（押下ごと＝name+qid+pressTs に1行。`pressTs` が無い古い行は name+qid で1つの押下とみなす）
 - `type:'result'` … `{ type, name, level, score, timeSec, rank, rankIdx, cleared, qids:[…], marks:'◎○×…', ts }` → **results** シート
 - `type:'answer'` … `{ type, name, qid, level, phase, pos, picked:[押した選択肢の添字 0〜4], correct:[正解の添字], result:'ok'|'partial'|'ng', timeSec, attempt, mode:'challenge'|'practice', ts }` → **answers** シート
 - `type:'rank'` … `{ type, name, level, score, timeSec, rank, rankIdx, ts }`（「ランキングにとうろく」を押したとき） → **ranking** シート
