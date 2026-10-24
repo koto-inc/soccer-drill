@@ -346,7 +346,7 @@ function challengeTopMarkup() {
   <h2 class="cath">${c.count}問チャレンジ</h2>
   <p class="chlead">${c.count}問とくと、きみの<b>級</b>が決まる！</p>
   <p class="ladder">${ranks.map((r) => `<span>${r.emoji}${esc(r.name)}</span>`).join('<i>→</i>')}</p>
-  <p class="hint" style="margin-bottom:10px">${LV[1]}で${c.count}点なら ${top(1).emoji}${esc(top(1).name)}。${LV[3]}で${c.count}点なら…${top(3).emoji}<b>${esc(top(3).name)}</b>！ ◎=1点、○=0.5点、×=−0.5点。1問${c.perQuestionSec}秒をこえると −0.5点。${c.count}点まんてん。${config.FEEDBACK_ENDPOINT ? 'ベストきろくを<a href="#ranking">ランキング</a>にとうろくして、チームのトップをねらえ！' : ''}</p>
+  <p class="hint" style="margin-bottom:10px">${LV[1]}で${c.count}点なら ${top(1).emoji}${esc(top(1).name)}。${LV[3]}で${c.count}点なら…${top(3).emoji}<b>${esc(top(3).name)}</b>！ ◎=1点、○=0.5点。まちがいを1つえらぶと −0.5点、1問${c.perQuestionSec}秒をこえると −0.5点。${c.count}点まんてん。${config.FEEDBACK_ENDPOINT ? 'ベストきろくを<a href="#ranking">ランキング</a>にとうろくして、チームのトップをねらえ！' : ''}</p>
   <div class="chbtns">
     ${challengeButtons()}
   </div>
@@ -664,8 +664,8 @@ async function main() {
     }
   }
   // 10問チャレンジ（進行・結果は端末側 app.js で描く）
-  write('challenge/index.html', layout({ title: `${config.CHALLENGE.count}問チャレンジ`, description: `レベルをえらんでランダムに${config.CHALLENGE.count}問。◎=1点、○=0.5点、×=−0.5点、1問${config.CHALLENGE.perQuestionSec}秒をこえると −0.5点。何級までいけるかな？`, pathname: '/challenge/',
-    body: `${whoMarkup()}<div id="challenge" data-page="challenge"><div class="card challenge"><h1 class="qtitle">${config.CHALLENGE.count}問チャレンジ</h1><p class="hint">レベルをえらんでね。ランダムに${config.CHALLENGE.count}問。◎=1点、○=0.5点、×=−0.5点。1問${config.CHALLENGE.perQuestionSec}秒をこえると −0.5点。</p><div class="chbtns" id="chLevels">${challengeButtons()}</div><div class="actions" style="justify-content:center"><a class="btn" href="${href('/')}">TOPへ</a></div><noscript><p class="hint">チャレンジには JavaScript がいります。</p></noscript></div></div>`,
+  write('challenge/index.html', layout({ title: `${config.CHALLENGE.count}問チャレンジ`, description: `レベルをえらんでランダムに${config.CHALLENGE.count}問。◎=1点、○=0.5点、まちがいをえらぶと −0.5点、1問${config.CHALLENGE.perQuestionSec}秒をこえると −0.5点。何級までいけるかな？`, pathname: '/challenge/',
+    body: `${whoMarkup()}<div id="challenge" data-page="challenge"><div class="card challenge"><h1 class="qtitle">${config.CHALLENGE.count}問チャレンジ</h1><p class="hint">レベルをえらんでね。ランダムに${config.CHALLENGE.count}問。◎=1点、○=0.5点。まちがいを1つえらぶと −0.5点、1問${config.CHALLENGE.perQuestionSec}秒をこえると −0.5点。</p><div class="chbtns" id="chLevels">${challengeButtons()}</div><div class="actions" style="justify-content:center"><a class="btn" href="${href('/')}">TOPへ</a></div><noscript><p class="hint">チャレンジには JavaScript がいります。</p></noscript></div></div>`,
     extraHead: '<meta name="robots" content="noindex">' }));
   // サッカーのことば（用語の一覧）
   write('words/index.html', wordsPage()); add('/words/', '0.4');

@@ -8,14 +8,15 @@
 (function(){
   'use strict';
   var CFG=window.PD_CONFIG||{};
-  var CH=CFG.challenge||{count:7,perQuestionSec:30,timePenalty:0.5,ngScore:-0.5,bands:[0,3,5,7],rankTable:{},msg:'つぎは{next}をねらおう！',msgTop:'パーフェクト！'};
+  var CH=CFG.challenge||{count:7,perQuestionSec:30,timePenalty:0.5,missPenalty:0.5,bands:[0,3,5,7],rankTable:{},msg:'つぎは{next}をねらおう！',msgTop:'パーフェクト！'};
   var QSEC=Number(CH.perQuestionSec)||30, TPEN=Number(CH.timePenalty)||0.5;   // 1問の目標タイム（秒）と、超えたときにひく点
+  var MPEN=(typeof CH.missPenalty==='number')?CH.missPenalty:0.5;   // まちがいを1つ選ぶごとにひく点
   var RANKS=CFG.ranks||[];
   var LVN=CFG.levelNames||{1:'入門',2:'中級',3:'上級'};
   var KEYS=['ア','イ','ウ','エ','オ'];
   var BASE=CFG.base||'';
   var MARK={ok:'◎',partial:'○',ng:'×'};
-  var SCORE={ok:1,partial:0.5,ng:(typeof CH.ngScore==='number'?CH.ngScore:-0.5)};
+  var SCORE={ok:1,partial:0.5,ng:0};   // 正解のぶん（まちがいを選んだ分は MPEN でひく）
 
   function lsGet(k,def){ try{ var v=localStorage.getItem(k); return v==null?def:JSON.parse(v); }catch(e){ return def; } }
   function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
@@ -401,10 +402,12 @@
       if(ch){
         var cur=ssGet('pd-ch');
         var late=elapsed>QSEC;   // 1問の目標タイムをこえたら −TPEN 点
-        var qscore=SCORE[cls]-(late?TPEN:0);
-        if(cur&&cur.results.length===chPos){ cur.results.push({id:id,title:root.getAttribute('data-title')||'',cls:cls,base:SCORE[cls],late:late,score:qscore,time:Math.round(elapsed*10)/10}); ssSet('pd-ch',cur); }
+        // 1問の点 ＝ 正解のぶん（全部=1、一部=0.5、なし=0） − MPEN × まちがいを選んだ数 − 時間超過ぶん
+        var base=hit===correct.length?1:(hit>0?0.5:0);
+        var qscore=Math.max(0,Math.round((base-miss*MPEN-(late?TPEN:0))*10)/10);   // 1問の下限は 0 点
+        if(cur&&cur.results.length===chPos){ cur.results.push({id:id,title:root.getAttribute('data-title')||'',cls:cls,base:base,miss:miss,late:late,score:qscore,time:Math.round(elapsed*10)/10}); ssSet('pd-ch',cur); }
         document.querySelectorAll('.qpos').forEach(function(el){
-          el.textContent=(chPos+1)+' / '+ch.ids.length+'　⏱ '+Math.floor(elapsed)+'秒'+(late?'（'+QSEC+'秒をこえた −'+TPEN+'点）':'')+'　この問題 '+fmtScore(qscore)+'点';
+          el.textContent=(chPos+1)+' / '+ch.ids.length+'　⏱ '+Math.floor(elapsed)+'秒'+(late?'（'+QSEC+'秒をこえた −'+TPEN+'点）':'')+(miss?'　ちがうの '+miss+' つ（−'+fmtScore(miss*MPEN)+'点）':'')+'　この問題 '+fmtScore(qscore)+'点';
           el.classList.toggle('late',late);
         });
       }
@@ -476,9 +479,9 @@
           :'<button class="primary big" type="button" id="btnRank">🏆 ランキングにとうろくする</button><p class="hint">「'+esc(NAME)+'」のなまえで、TOP のランキングにのるよ。</p>')+'</div>':'')+
       '</div>'+
       '<div class="card">'+
-        '<p class="hint" style="margin-bottom:10px">◎=1点、○=0.5点、×=−0.5点。1問'+QSEC+'秒をこえると −'+fmtScore(TPEN)+'点。タップすると、その問題をもう一度見られる。</p>'+
+        '<p class="hint" style="margin-bottom:10px">◎=1点、○=0.5点。まちがいを1つえらぶと −'+fmtScore(MPEN)+'点、1問'+QSEC+'秒をこえると −'+fmtScore(TPEN)+'点。タップすると、その問題をもう一度見られる。</p>'+
         '<div class="list">'+ch.results.map(function(x,i){
-          return '<a class="item" href="'+qurl(x.id)+'"><span class="n"><span class="mk '+x.cls+'">'+MARK[x.cls]+'</span><br>'+(i+1)+'</span><span class="t">'+esc(x.title)+'<small>Q'+esc(x.id)+'・'+fmtScore(x.score)+'点・'+Math.round(x.time||0)+'秒'+(x.late?'（'+QSEC+'秒をこえた −'+fmtScore(TPEN)+'）':'')+'</small></span></a>';
+          return '<a class="item" href="'+qurl(x.id)+'"><span class="n"><span class="mk '+x.cls+'">'+MARK[x.cls]+'</span><br>'+(i+1)+'</span><span class="t">'+esc(x.title)+'<small>Q'+esc(x.id)+'・'+fmtScore(x.score)+'点・'+Math.round(x.time||0)+'秒'+(x.miss?'（ちがうの '+x.miss+' つ −'+fmtScore(x.miss*MPEN)+'）':'')+(x.late?'（'+QSEC+'秒をこえた −'+fmtScore(TPEN)+'）':'')+'</small></span></a>';
         }).join('')+'</div>'+
       '</div>'+
       '<div class="actions"><button class="primary big" type="button" data-start-challenge="'+level+'">もう一度</button><button type="button" id="btnOtherLevel">べつのレベルをやる</button><a class="btn" href="'+BASE+'/">TOPへ</a></div>';
