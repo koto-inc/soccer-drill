@@ -345,7 +345,7 @@ function challengeTopMarkup() {
 <section class="card challenge">
   <h2 class="cath">${c.count}問チャレンジ</h2>
   <p class="chlead">${c.count}問とくと、きみの<b>級</b>が決まる！</p>
-  <p class="ladder">${ranks.map((r) => `<span>${r.emoji}${esc(r.name)}</span>`).join('<i>→</i>')}</p>
+  <table class="ranktbl"><thead><tr><th>点数</th><th>${LV[1]}</th><th>${LV[2]}</th><th>${LV[3]}</th></tr></thead><tbody>${c.bands.map((b, i) => `<tr><th>${i < c.bands.length - 1 ? `${b}〜${c.bands[i + 1] - 0.5}` : `${b}`}</th>${[1, 2, 3].map((l) => { const r = ranks[c.rankTable[l][i]]; return `<td>${r.emoji}${esc(r.name)}</td>`; }).join('')}</tr>`).join('')}</tbody></table>
   <p class="hint" style="margin-bottom:10px">${LV[1]}で${c.count}点なら ${top(1).emoji}${esc(top(1).name)}。${LV[3]}で${c.count}点なら…${top(3).emoji}<b>${esc(top(3).name)}</b>！ ◎=1点、○=0.5点。まちがいを1つえらぶと −0.5点、1問${c.perQuestionSec}秒をこえると −0.5点。${c.count}点まんてん。${config.FEEDBACK_ENDPOINT ? 'ベストきろくを<a href="#ranking">ランキング</a>にとうろくして、チームのトップをねらえ！' : ''}</p>
   <div class="chbtns">
     ${challengeButtons()}

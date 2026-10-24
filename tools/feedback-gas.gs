@@ -400,8 +400,8 @@ function migrateSpreadsheet() {
 //            score・timeSec・rank・rankIdx・cleared を書き直す。qids と marks も最初の CHALLENGE_COUNT 問に切りつめる。answers に無い問題は marks（◎1/○0.5/×0）で補う
 //   ranking: 対応する results の行（name・level・以前の score・timeSec が同じ）の新しい値に合わせる
 // ランクのはしごと段（site.config.mjs の RANKS / CHALLENGE.rankTable / bands と同じにする）
-var RANK_NAMES = ['入門級', '少年サッカー級', '少年サッカーエース級', '高校サッカー級', 'Jリーグ級', '日本代表級', 'ワールドカップ級'];
-var RANK_TABLE = { 1: [0, 1, 2, 3], 2: [2, 3, 4, 5], 3: [3, 4, 5, 6] };
+var RANK_NAMES = ['入門級', '少年サッカー級', '少年サッカーエース級', '全国少年サッカー級', '高校サッカー級', 'Jリーグ級', '日本代表級', 'ワールドカップ級'];
+var RANK_TABLE = { 1: [0, 1, 2, 3], 2: [0, 1, 4, 5], 3: [0, 5, 6, 7] };
 var RANK_BANDS = [0, 3, 5, 7];
 function rankIdxOf_(level, score) {
   var b = 0; for (var k = 0; k < RANK_BANDS.length; k++) if (score >= RANK_BANDS[k]) b = k;

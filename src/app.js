@@ -176,10 +176,12 @@
   function rankOf(level,score,timeSec){
     var table=(CH.rankTable&&CH.rankTable[level])||[0,1,2,3];
     // ランクは合計点だけで決める（タイムは1問ごとに点からひいてあるので、ここでは見ない）
-    var idx=table[Math.min(bandIndex(score),table.length-1)];
+    var pos=Math.min(bandIndex(score),table.length-1);
+    var idx=table[pos];
     var r=RANKS[idx]||{emoji:'',name:''};
-    var next=RANKS[idx+1];
-    var msg=next?String(CH.msg||'').replace('{next}',next.name):(CH.msgTop||'');
+    var next=pos<table.length-1?RANKS[table[pos+1]]:null;   // 「つぎは〇〇」は、そのレベルの次の段
+    // そのレベルの最上位: 上級なら msgTop、入門・中級なら上のレベルをすすめる
+    var msg=next?String(CH.msg||'').replace('{next}',next.name):(LVN[level+1]?'パーフェクト！つぎは'+LVN[level+1]+'チャレンジにちょうせん！':(CH.msgTop||''));
     return {idx:idx,emoji:r.emoji,name:r.name,msg:msg};
   }
 
