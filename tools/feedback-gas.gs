@@ -3,7 +3,10 @@
  *   - 👍👎 フィードバックの記録（doPost, type:'feedback' → シート 'feedback'）
  *   - チャレンジ結果の記録（doPost, type:'result' → シート 'results'）
  *   - 1問ごとの答えログ（doPost, type:'answer' → シート 'answers'。問題を直すためのデータ。doGet では返さない）
- *   - 名前ごとのレベル別ベスト（doGet ?name=... → JSON）
+ *   - 名前ごとのレベル別ベスト（doGet ?name=... → JSON）、ランキング（doGet ?ranking=1 → JSON）
+ *   - 👎 の一覧（feedback の 👎 を シート 'badlist' にも1人×1問で1行。手で rebuildBadlist を実行すると過去分から作り直せる）
+ *   - 送信・取得のすべてに key（API_KEY と同じ文字列）が必要。違えば {ok:false,error:'forbidden'}
+ *   - セルに書く文字列の先頭が = + - @ なら空白を足して、数式として実行されないようにする
  *
  * 使い方（README「👍👎・チャレンジ結果の受け口」も参照）
  * 1. 保存先のスプレッドシートを開く（SPREADSHEET_ID のシート。別のシートにしたいときは ID を書きかえる）
@@ -16,22 +19,23 @@
  * 5. コードを直したら「デプロイ」→「デプロイを管理」→ 鉛筆 → バージョン「新バージョン」→ デプロイ（URL は変わらない）
  *
  * ---- doPost（サイト側は navigator.sendBeacon(url, Blob(JSON文字列, 'text/plain'))。使えなければ fetch POST no-cors keepalive）----
- *   type:'feedback' { type, name, qid, vote:'good'|'bad', comment, reasons:[👎の理由チップの文字列], level, phase, pos, device('スマホ'|'タブレット'|'PC'。ua 列に入る), ts }
+ *   すべての送信に key を含める（site.config.mjs の FEEDBACK_KEY）。
+ *   type:'feedback' { type, key, name, qid, vote:'good'|'bad', comment, reasons:[👎の理由チップの文字列], level, phase, pos, device('スマホ'|'タブレット'|'PC'。ua 列に入る), ts }
  *                                                                                                  → 'feedback' シート
- *   type:'result'   { type, name, level:1|2|3, score, timeSec, rank(ランク名), rankIdx, cleared(30秒をこえた問題が1つも無ければ true),
+ *   type:'result'   { type, key, name, level:1|2|3, score(7点満点。1問 ＝ 正解のぶん − 0.5×まちがいの数 − 30秒超過0.5、下限0), timeSec, rank(ランク名), rankIdx, cleared(30秒をこえた問題が1つも無ければ true),
  *                     qids:[出た問題のID], marks:'◎○×…'(問題数ぶんの文字), ts }                   → 'results' シート
- *   type:'answer'   { type, name, qid, level, phase, pos, picked:[押した選択肢の添字 0〜4], correct:[正解の添字],
+ *   type:'answer'   { type, key, name, qid, level, phase, pos, picked:[押した選択肢の添字 0〜4], correct:[正解の添字],
  *                     result:'ok'|'partial'|'ng', timeSec(問題表示→答え合わせ), attempt(同じ問題で何回目か),
  *                     mode:'challenge'|'practice', ts }                                            → 'answers' シート
- *   type:'rank'     { type, name, level, score, timeSec, rank, rankIdx, ts }（結果ページで「ランキングにとうろく」を押したとき）
+ *   type:'rank'     { type, key, name, level, score, timeSec, rank, rankIdx, ts }（結果ページで「ランキングにとうろく」を押したとき）
  *                                                                                                  → 'ranking' シート
  *   type が無いものは feedback として扱う（古いサイトからの送信）。返事: {ok:true} / {ok:false,error}
- *   feedback は同じ name+qid の行が複数来ることがある（👎 のあとに理由チップを足すと送り直す）→ いちばん下の行が最新
+ *   feedback は同じ name+qid の行が複数来ることがある（👎 のあとに理由チップを足すと送り直す）→ いちばん下の行が最新。👎 は badlist にも反映（同じ name+qid は更新、👍 に変わっても消さない）
  *   ヘッダーは足りない列（例: 古い feedback シートの 'reasons'）を末尾に書き足すだけで、既存の列は動かさない
  *
- * ---- doGet（サイト側は fetch(url + '?name=' + encodeURIComponent(name)) → JSON）----
+ * ---- doGet（サイト側は fetch(url + '?name=' + encodeURIComponent(name) + '&key=' + key) → JSON。key が無いか違えば forbidden）----
  *   その name の 'results' からレベル別のベスト（score が最大、同点なら timeSec が短い）を返す:
- *     { "1": { "score": 8.5, "time": 272, "rank": "Jリーグ級", "cleared": true, "ts": "2026-10-18T…" }, "2": {…}, "3": {…} }
+ *     { "1": { "score": 5.5, "time": 150, "rank": "少年サッカーエース級", "cleared": true, "ts": "2026-10-25T…" }, "2": {…}, "3": {…} }
  *   記録が無いレベルは入らない。name が空なら {}。名前の一覧や他の人の記録は返さない。
  *   ?ranking=1 は例外で、「ランキングにとうろく」した人のなまえ・点・タイム・ランクだけを、レベルごとに上位 RANKING_TOP 人返す
  *   （60秒キャッシュ。とうろくがあったときはキャッシュを消す）。
@@ -83,7 +87,7 @@ function cell_(s) { s = String(s == null ? '' : s); return /^[=+\-@]/.test(s) ? 
 // サイトから送られた key が API_KEY と同じか（API_KEY が空なら照合しない）
 function keyOk_(k) { return !API_KEY || String(k || '') === API_KEY; }
 function cleanName_(s) { return cell_(String(s || '').replace(/\s+/g, ' ').trim().slice(0, 12)); }
-function scoreOfMarks_(marks) { var s = 0; for (var i = 0; i < marks.length; i++) { if (marks[i] === '◎') s += 1; else if (marks[i] === '○') s += 0.5; else if (marks[i] === '×') s -= 0.5; } return Math.max(0, s); }   // ×=-0.5。1問ごとの時間ペナルティはシートに無いので入れられない
+function scoreOfMarks_(marks) { var s = 0; for (var i = 0; i < marks.length; i++) { if (marks[i] === '◎') s += 1; else if (marks[i] === '○') s += 0.5; else if (marks[i] === '×') s -= 0.5; } return Math.max(0, s); }   // 10問時代の記録を今の問題数に合わせるための近似。今のルール（まちがいの数と30秒超過で減点）はシートの marks からは分からないので、× を -0.5 とみなす
 // 問題数を変える前の記録を、今の問題数に合わせる。marks（◎○×の列）があれば最初の CHALLENGE_COUNT 問で計算し直し、
 // 無ければ点とタイムを問題数の比で縮める（点は 0.5 きざみに切り捨て）
 function adjust_(score, time, marks) {
@@ -152,7 +156,7 @@ function doPost(e) {
 }
 
 // ?ranking=1 → レベル別ランキング（「ランキングにとうろく」した記録だけ。名前ごとのベストを上位 RANKING_TOP 人）
-//   { "1": [ { "name": "たくま", "score": 10, "time": 454, "rank": "Jリーグ級", "rankIdx": 3 }, … ], "2": [...], "3": [...] }
+//   { "1": [ { "name": "たくま", "score": 7, "time": 150, "rank": "高校サッカー級", "rankIdx": 3 }, … ], "2": [...], "3": [...] }（?ranking=1&key=… で取る）
 // ?name=...   → その名前のレベル別ベスト（端末をまたいで最高記録を出すため）
 function doGet(e) {
   var p = (e && e.parameter) || {};
