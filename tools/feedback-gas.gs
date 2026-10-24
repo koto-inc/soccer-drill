@@ -23,11 +23,11 @@
  *   type:'feedback' { type, key, name, qid, vote:'good'|'bad', comment, reasons:[👎の理由チップの文字列], level, phase, pos, device('スマホ'|'タブレット'|'PC'。ua 列に入る), pressTs(👍👎 を押した時刻。送り直しでは変わらない),
  *                     picked/correct/result/timeSec(👎 を押したときの、その問題の答え。シートでは記号・大文字), ts }
  *                                                                                                  → 'feedback' シート
- *   type:'result'   { type, key, name, level:1|2|3, score(7点満点。1問 ＝ 正解のぶん − 0.5×まちがいの数 − 30秒超過0.5、下限0), timeSec, rank(ランク名), rankIdx, cleared(30秒をこえた問題が1つも無ければ true),
+ *   type:'result'   { type, key, name, level:1|2|3, score(7点満点。1問 ＝ 正解のぶん − 0.5×まちがいの数 − 40秒超過0.5、下限0), timeSec, rank(ランク名), rankIdx, cleared(40秒をこえた問題が1つも無ければ true),
  *                     qids:[出た問題のID], marks:'◎○×…'(問題数ぶんの文字), ts }                   → 'results' シート
  *   type:'answer'   { type, key, name, qid, level, phase, pos, picked:[押した選択肢の添字 0〜4], correct:[正解の添字],
  *                     hit(正解を選んだ数), miss(まちがいを選んだ数), result:'ok'|'partial'|'ng', timeSec(問題表示→答え合わせ),
- *                     late(30秒をこえたら true), score(採点ルールどおりの得点。下限0), attempt(同じ問題で何回目か),
+ *                     late(40秒をこえたら true), score(採点ルールどおりの得点。下限0), attempt(同じ問題で何回目か),
  *                     mode:'challenge'|'practice', ts }                                            → 'answers' シート
  *                   シートでは picked/correct は「ア,ウ」のように記号、result は OK/PARTIAL/NG、時間超過は OK/OVER で書く
  *                   （古い形式の行は migrateAnswers を1回実行すると同じ形に直る）
@@ -93,7 +93,7 @@ function cell_(s) { s = String(s == null ? '' : s); return /^[=+\-@]/.test(s) ? 
 // サイトから送られた key が API_KEY と同じか（API_KEY が空なら照合しない）
 function keyOk_(k) { return !API_KEY || String(k || '') === API_KEY; }
 function cleanName_(s) { return cell_(String(s || '').replace(/\s+/g, ' ').trim().slice(0, 12)); }
-function scoreOfMarks_(marks) { var s = 0; for (var i = 0; i < marks.length; i++) { if (marks[i] === '◎') s += 1; else if (marks[i] === '○') s += 0.5; else if (marks[i] === '×') s -= 0.5; } return Math.max(0, s); }   // 10問時代の記録を今の問題数に合わせるための近似。今のルール（まちがいの数と30秒超過で減点）はシートの marks からは分からないので、× を -0.5 とみなす
+function scoreOfMarks_(marks) { var s = 0; for (var i = 0; i < marks.length; i++) { if (marks[i] === '◎') s += 1; else if (marks[i] === '○') s += 0.5; else if (marks[i] === '×') s -= 0.5; } return Math.max(0, s); }   // 10問時代の記録を今の問題数に合わせるための近似。今のルール（まちがいの数と40秒超過で減点）はシートの marks からは分からないので、× を -0.5 とみなす
 // 問題数を変える前の記録を、今の問題数に合わせる。marks（◎○×の列）があれば最初の CHALLENGE_COUNT 問で計算し直し、
 // 無ければ点とタイムを問題数の比で縮める（点は 0.5 きざみに切り捨て）
 function adjust_(score, time, marks) {
@@ -318,7 +318,7 @@ function rebuildBadlist() {
 
 // ---- answers シートの行の作り方（picked/correct は記号、正解数・不正解数・時間超過・得点つき） ----
 var KEYS_ = ['ア', 'イ', 'ウ', 'エ', 'オ'];
-var ANS_RULE = { perQuestionSec: 30, missPenalty: 0.5, timePenalty: 0.5 };   // サイト側（site.config.mjs の CHALLENGE）と同じ値にする。migrateAnswers の計算に使う
+var ANS_RULE = { perQuestionSec: 40, missPenalty: 0.5, timePenalty: 0.5 };   // サイト側（site.config.mjs の CHALLENGE）と同じ値にする。migrateAnswers の計算に使う
 // 添字の配列（または '0,2' のような文字列）→ 'ア,ウ'
 function letters_(v) {
   var arr = Array.isArray(v) ? v : String(v == null ? '' : v).split(',');
@@ -391,4 +391,91 @@ function migrateSpreadsheet() {
   var extra = to.getSheetByName('シート1') || to.getSheetByName('Sheet1');
   if (extra && to.getSheets().length > 1 && extra.getLastRow() === 0) to.deleteSheet(extra);
   Logger.log('コピーした: ' + (done.join(', ') || 'なし'));
+}
+
+// ---- 必要なときに手で実行する（何度でも可）: answers・results・ranking を今の採点ルールで計算し直す ----
+// Apps Script エディタで recomputeAll を選んで「実行」。採点ルールを変えたとき（例: 1問の目標タイムを 30秒→40秒）に、過去の記録もそろえるために使う。
+//   answers: 時間超過・得点 を ANS_RULE で計算し直す
+//   results: qids の最初の CHALLENGE_COUNT 問について、同じ名前の answers（チャレンジ中・結果より前の最新の行）から 1問ごとの得点と秒数を集めて
+//            score・timeSec・rank・rankIdx・cleared を書き直す。qids と marks も最初の CHALLENGE_COUNT 問に切りつめる。answers に無い問題は marks（◎1/○0.5/×0）で補う
+//   ranking: 対応する results の行（name・level・以前の score・timeSec が同じ）の新しい値に合わせる
+// ランクのはしごと段（site.config.mjs の RANKS / CHALLENGE.rankTable / bands と同じにする）
+var RANK_NAMES = ['入門級', '少年サッカー級', '少年サッカーエース級', '高校サッカー級', 'Jリーグ級', '日本代表級', 'ワールドカップ級'];
+var RANK_TABLE = { 1: [0, 1, 2, 3], 2: [2, 3, 4, 5], 3: [3, 4, 5, 6] };
+var RANK_BANDS = [0, 3, 5, 7];
+function rankIdxOf_(level, score) {
+  var b = 0; for (var k = 0; k < RANK_BANDS.length; k++) if (score >= RANK_BANDS[k]) b = k;
+  var t = RANK_TABLE[level] || RANK_TABLE[1];
+  return t[Math.min(b, t.length - 1)];
+}
+function headerOf_(sh) { return sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String); }
+function recomputeAll() {
+  var a = recomputeAnswers_();
+  var r = recomputeResults_();
+  var k = recomputeRanking_(r.map);
+  Logger.log('answers ' + a + ' 行、results ' + r.n + ' 行（answers に無く marks で補った問題 ' + r.fallback + ' 件）、ranking ' + k + ' 行を書き直した');
+}
+function recomputeAnswers_() {
+  var sh = getSpreadsheet_().getSheetByName(SHEETS.answer.name);
+  if (!sh || sh.getLastRow() < 2) return 0;
+  var h = headerOf_(sh), c = function (k) { return h.indexOf(k); };
+  if (c('得点') < 0) throw new Error('answers が新しい形式ではありません。先に migrateAnswers を実行してください');
+  var rows = sh.getRange(2, 1, sh.getLastRow() - 1, h.length).getValues();
+  rows.forEach(function (r) {
+    var nC = toIdx_(r[c('correct')]).length, hit = Number(r[c('正解数')]) || 0, miss = Number(r[c('不正解数')]) || 0, t = Number(r[c('timeSec')]) || 0;
+    var late = t > ANS_RULE.perQuestionSec;
+    r[c('時間超過')] = late ? 'OVER' : 'OK';
+    r[c('得点')] = answerScore_(hit, miss, nC, late);
+  });
+  sh.getRange(2, 1, rows.length, h.length).setValues(rows);
+  return rows.length;
+}
+function recomputeResults_() {
+  var ss = getSpreadsheet_();
+  var an = ss.getSheetByName(SHEETS.answer.name), rs = ss.getSheetByName(SHEETS.result.name);
+  var map = {}, fallback = 0;
+  if (!rs || rs.getLastRow() < 2) return { n: 0, fallback: 0, map: map };
+  var ah = headerOf_(an), ac = function (k) { return ah.indexOf(k); };
+  var logs = {};   // name -> [{qid, t, score, time}]
+  an.getRange(2, 1, an.getLastRow() - 1, ah.length).getValues().forEach(function (r) {
+    if (String(r[ac('mode')]) !== 'challenge') return;
+    var name = cleanName_(r[ac('name')]);
+    (logs[name] = logs[name] || []).push({ qid: Number(r[ac('qid')]) || 0, t: Date.parse(String(r[ac('ts(端末)')])) || 0, score: Number(r[ac('得点')]) || 0, time: Number(r[ac('timeSec')]) || 0, late: String(r[ac('時間超過')]) === 'OVER' });
+  });
+  var rh = headerOf_(rs), rc = function (k) { return rh.indexOf(k); };
+  var rows = rs.getRange(2, 1, rs.getLastRow() - 1, rh.length).getValues();
+  rows.forEach(function (r) {
+    var name = cleanName_(r[rc('name')]), level = Number(r[rc('level')]) || 1;
+    var oldScore = Number(r[rc('score')]) || 0, oldTime = Number(r[rc('timeSec')]) || 0;
+    var rt = Date.parse(String(r[rc('ts(端末)')])) || 0;
+    var qids = String(r[rc('qids')] || '').split(',').map(Number).filter(Boolean).slice(0, CHALLENGE_COUNT);
+    var marks = String(r[rc('marks')] || '');
+    var total = 0, time = 0, lateN = 0;
+    qids.forEach(function (q, i) {
+      var cands = (logs[name] || []).filter(function (x) { return x.qid === q && x.t <= rt + 5000 && x.t >= rt - 3 * 3600 * 1000; }).sort(function (x, y) { return y.t - x.t; });
+      if (cands.length) { total += cands[0].score; time += cands[0].time; if (cands[0].late) lateN++; }
+      else { var m = marks.charAt(i); total += m === '◎' ? 1 : m === '○' ? 0.5 : 0; fallback++; }
+    });
+    total = Math.max(0, Math.round(total * 10) / 10); time = Math.round(time);
+    var idx = rankIdxOf_(level, total);
+    r[rc('score')] = total; r[rc('timeSec')] = time; r[rc('rank')] = RANK_NAMES[idx]; r[rc('rankIdx')] = idx; r[rc('cleared')] = lateN === 0;
+    r[rc('qids')] = qids.join(','); r[rc('marks')] = marks.slice(0, CHALLENGE_COUNT);
+    map[[name, level, oldScore, oldTime].join('|')] = { score: total, time: time, rank: RANK_NAMES[idx], idx: idx };
+  });
+  rs.getRange(2, 1, rows.length, rh.length).setValues(rows);
+  return { n: rows.length, fallback: fallback, map: map };
+}
+function recomputeRanking_(map) {
+  var sh = getSpreadsheet_().getSheetByName(SHEETS.rank.name);
+  if (!sh || sh.getLastRow() < 2) return 0;
+  var h = headerOf_(sh), c = function (k) { return h.indexOf(k); };
+  var rows = sh.getRange(2, 1, sh.getLastRow() - 1, h.length).getValues(), n = 0;
+  rows.forEach(function (r) {
+    var key = [cleanName_(r[c('name')]), Number(r[c('level')]) || 1, Number(r[c('score')]) || 0, Number(r[c('timeSec')]) || 0].join('|');
+    var m = map[key]; if (!m) return;
+    r[c('score')] = m.score; r[c('timeSec')] = m.time; r[c('rank')] = m.rank; r[c('rankIdx')] = m.idx; n++;
+  });
+  sh.getRange(2, 1, rows.length, h.length).setValues(rows);
+  CacheService.getScriptCache().remove('ranking');
+  return n;
 }

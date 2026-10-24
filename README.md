@@ -153,9 +153,9 @@ TOP の「入門チャレンジ」「中級チャレンジ」「上級チャレ�
 
 - 正解点: ◎=1点、○=0.5点、×=0点（7点満点）。点数の区切りは `CHALLENGE.bands`（0〜2.5 / 3〜4.5 / 5〜6.5 / 7）
 - タイム: 問題を見てから「答え合わせ」を押すまでを各問で計り、7問の合計を出す（解説を読んでいる時間は含めない）
-- 採点: 1問の点 ＝ 正解のぶん（全部=1点 ◎、一部=0.5点 ○、なし=0点 ×）− `CHALLENGE.missPenalty`（0.5点）× まちがいを選んだ数。1問の下限は 0 点。5つ全部チェックしても得にならない（正解2つなら 1−1.5 → 0点）。1問の目標タイムは `CHALLENGE.perQuestionSec`（30秒、レベル共通）で、「問題を見てから答え合わせを押すまで」がこれを超えた問題は `CHALLENGE.timePenalty`（0.5点）ひかれる。ランクは合計点だけで決まる（タイムは点に含まれる）
+- 採点: 1問の点 ＝ 正解のぶん（全部=1点 ◎、一部=0.5点 ○、なし=0点 ×）− `CHALLENGE.missPenalty`（0.5点）× まちがいを選んだ数。1問の下限は 0 点。5つ全部チェックしても得にならない（正解2つなら 1−1.5 → 0点）。1問の目標タイムは `CHALLENGE.perQuestionSec`（40秒、レベル共通）で、「問題を見てから答え合わせを押すまで」がこれを超えた問題は `CHALLENGE.timePenalty`（0.5点）ひかれる。ランクは合計点だけで決まる（タイムは点に含まれる）
 - ランク: `RANKS` のはしご（入門級 → 少年サッカー級 → 少年サッカーエース級 → 高校サッカー級 → Jリーグ級 → 日本代表級 → ワールドカップ級）を、`CHALLENGE.rankTable` でレベルごとに割り当てる。入門は 入門級/少年サッカー級/少年サッカーエース級/高校サッカー級、中級は 少年サッカーエース級〜日本代表級、上級は 高校サッカー級〜ワールドカップ級（0〜2.5 / 3〜4.5 / 5〜6.5 / 7 点の順）
-- 結果ページ（`/challenge/`）: 合計点・タイム（30秒をこえた問題の数）・ランク・各問の◎○×一覧（タップでその問題へ）・「🏆 ランキングにとうろくする」（`FEEDBACK_ENDPOINT` があるとき）・「もう一度」「べつのレベルをやる」「TOPへ」
+- 結果ページ（`/challenge/`）: 合計点・タイム（40秒をこえた問題の数）・ランク・各問の◎○×一覧（タップでその問題へ）・「🏆 ランキングにとうろくする」（`FEEDBACK_ENDPOINT` があるとき）・「もう一度」「べつのレベルをやる」「TOPへ」
 - TOP のチャレンジ枠には「級のはしご」（`RANKS` を順に並べたもの）と「入門で7点なら 高校サッカー級、上級で7点なら…ワールドカップ級！」のあおり文が出る
 - ベスト記録はなまえ×レベルごとに端末（localStorage `pd:<name>:best`）に残り、TOP と /challenge/ の各ボタンの下に「〇〇さんのベストきろく: 🏟️ Jリーグ級 7.5点 4:32」と出る（スプレッドシートに大きい記録があればそれに差し替わる）。結果ページにも「🎉 〇〇さんの入門のベストきろく！」と出る
 - チャレンジ中は「べつの問題」「もう一回」は出ない（最初の答えで採点）。進行は sessionStorage なので、タブを閉じると消える
@@ -200,6 +200,7 @@ localStorage のキー:
 
 - `type:'feedback'` … `{ type, name, qid, vote:'good'|'bad', comment, reasons:['ことばがわからない', …], level, phase, pos, device（'スマホ'｜'タブレット'｜'PC'。シートでは ua 列に入る）, pressTs, picked, correct, result, timeSec（👎 を押したときの答え）, ts }` → **feedback** シート
 - 👎 のときは **badlist** シートにも1行（最終更新・name・qid・問題ページのURL・level/phase/pos・reasons・comment・ua・pressTs・picked・correct・result・timeSec。後ろ4つは 👎 を押したときのその問題の答え）。1回の押下につき1行で、チップや一言を足した送り直し（同じ `pressTs`）は行を更新、別の押下（同じ子が同じ問題でまた 👎）は別の行。あとで 👍 に変わっても消さない。過去の feedback から作り直すときは Apps Script エディタで `rebuildBadlist` を実行（何度でも可。badlist に手で書いたメモは消える）（押下ごと＝name+qid+pressTs に1行。`pressTs` が無い古い行は name+qid で1つの押下とみなす）
+- 採点ルールを変えたとき（目標タイムなど）は、Apps Script エディタで `recomputeAll` を実行すると、answers の 時間超過・得点、results の score/timeSec/rank/cleared（qids・marks は最初の7問に切りつめ）、ranking の score/timeSec/rank を今のルールで計算し直す（何度でも可。results は同じ名前の answers のチャレンジ記録から集計し、無い問題だけ marks で補う）。受け口の `ANS_RULE` と `RANK_*` は site.config.mjs の CHALLENGE / RANKS と同じ値にしておく
 - `type:'result'` … `{ type, name, level, score, timeSec, rank, rankIdx, cleared, qids:[…], marks:'◎○×…', ts }` → **results** シート
 - `type:'answer'` … `{ type, name, qid, level, phase, pos, picked:[押した選択肢の添字 0〜4], correct:[正解の添字], hit, miss, result:'ok'|'partial'|'ng', timeSec, late, score, attempt, mode:'challenge'|'practice', ts }` → **answers** シート（列: 受信日時・ts・name・qid・level・phase・pos・picked「ア,ウ」・correct「ア,ウ」・正解数・不正解数・result OK/PARTIAL/NG・時間超過 OK/OVER・timeSec・得点・attempt・mode。古い行は `migrateAnswers` を1回実行で同じ形に）
 - `type:'rank'` … `{ type, name, level, score, timeSec, rank, rankIdx, ts }`（「ランキングにとうろく」を押したとき） → **ranking** シート
