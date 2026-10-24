@@ -262,7 +262,8 @@ function updateBadlist_(d) {
   if (found) sh.getRange(found, 1, 1, row.length).setValues([row]);
   else sh.appendRow(row);
 }
-// ---- 1回だけ手で実行する: feedback シートの過去の行から badlist を作り直す ----
+// ---- 必要なときに手で実行する（何度でも可）: feedback シートの過去の行から badlist を作り直す ----
+// 普段は doPost が 👎 のたびに自動で追記するので不要。過去分を取り込むとき、行を消してしまったとき、並べ方を変えたときに使う。badlist に手で書いたメモは消えるので注意
 // Apps Script エディタで rebuildBadlist を選んで「実行」。既存の badlist の中身は消して、feedback で一度でも 👎 が押された name+qid を並べる（同じ組み合わせは、いちばん下の 👎 の行の内容）
 function rebuildBadlist() {
   var ss = getSpreadsheet_();
