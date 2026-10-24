@@ -141,7 +141,7 @@
         ol.innerHTML=rows.map(function(x,i){
           var r=rankOf(Number(ol.getAttribute('data-ranking')),Number(x.score)||0,Number(x.time)||0);   // ランクは今の配点で計算し直す
           var cls=(x.name===NAME?' me':'')+(i===0?' top1':'');
-          return '<li class="'+cls.trim()+'"><span class="no">'+(i+1)+'</span><span class="body"><span class="nm">'+esc(x.name)+'</span><span class="sc"><b>'+esc(r.emoji)+' '+esc(r.name)+'</b> ・ '+fmtScore(x.score)+'点 ・ '+mmss(x.time)+'</span></span></li>';
+          return '<li class="'+cls.trim()+'"><span class="no">'+(i+1)+'</span><span class="body"><span class="nm">'+esc(x.name)+'</span><span class="sc"><b>'+esc(r.emoji)+' '+esc(r.name)+'</b> ・ '+fmtScore(x.score)+'点 ・ '+mmss(x.time)+(r.starsText?' <span class="spd">'+r.starsText+'</span>':'')+'</span></span></li>';
         }).join('');
       });
     }
@@ -157,16 +157,18 @@
 
   /* ===== ランク（レベル × 点数 × タイム） ===== */
   function bandIndex(score){ var b=CH.bands||[0]; var i=0; for(var k=0;k<b.length;k++){ if(score>=b[k]) i=k; } return i; }
+  var STARS=["","★☆☆","★★☆","★★★"];
   function rankOf(level,score,timeSec){
     var table=(CH.rankTable&&CH.rankTable[level])||[0,1,2,3];
     var idx=table[Math.min(bandIndex(score),table.length-1)];
     var limit=CH.timeLimit&&CH.timeLimit[level];
+    // タイムは級には影響させない（点が高いのに級が低い逆転をなくす）。別の軸「はやさ ★」にする: もくひょう内=3、1.5倍以内=2、それ以上=1
     var over=!!(limit&&timeSec>limit);
-    if(over) idx=Math.max(idx-1,table[0]);
+    var stars=limit?(timeSec<=limit?3:(timeSec<=limit*1.5?2:1)):0;
     var r=RANKS[idx]||{emoji:'',name:''};
     var next=RANKS[idx+1];
     var msg=next?String(CH.msg||'').replace('{next}',next.name):(CH.msgTop||'');
-    return {idx:idx,emoji:r.emoji,name:r.name,msg:msg,over:over,limit:limit};
+    return {idx:idx,emoji:r.emoji,name:r.name,msg:msg,over:over,limit:limit,stars:stars,starsText:STARS[stars]||""};
   }
 
   /* ===== レベル別チャレンジ（進行は sessionStorage 'pd-ch'） =====
@@ -204,7 +206,7 @@
       var b=best[el.getAttribute('data-best')];
       if(!b){ el.hidden=true; return; }
       var r=rankOf(Number(el.getAttribute('data-best')),Number(b.score)||0,Number(b.time)||0);   // ランクは今のはしごで計算し直す（はしごを変えても古い番号を出さない）
-      el.textContent=(NAME?NAME+'さんの':'')+'ベストきろく: '+r.emoji+' '+r.name+' '+fmtScore(b.score)+'点 '+mmss(b.time);
+      el.textContent=(NAME?NAME+'さんの':'')+'ベストきろく: '+r.emoji+' '+r.name+' '+fmtScore(b.score)+'点 '+mmss(b.time)+(r.starsText?' はやさ '+r.starsText:'');
       el.hidden=false;
     });
   }
@@ -449,9 +451,9 @@
       post({type:'result',name:NAME,level:level,score:total,timeSec:Math.round(time),rank:r.name,rankIdx:r.idx,cleared:!r.over,
         qids:ch.ids.map(Number),marks:ch.results.map(function(x){ return MARK[x.cls]; }).join(''),ts:new Date().toISOString()});
     }
+    var spdMsg = r.stars===3 ? 'もくひょうタイム クリア！' : r.stars===2 ? 'あと少しで もくひょうタイム' : 'つぎは もっとはやく！';
     var timeLine = r.limit
-      ? (r.over ? '<p class="chtime over">⏱ タイム '+mmss(time)+' ／ もくひょう '+mmss(r.limit)+'<br><b>もくひょうタイムをすぎたので、ランク1つダウン</b></p>'
-                : '<p class="chtime ok">⏱ タイム '+mmss(time)+' ／ もくひょう '+mmss(r.limit)+'　<b>クリア！</b></p>')
+      ? '<p class="chtime'+(r.stars===3?' ok':'')+'">⏱ タイム '+mmss(time)+' ／ もくひょう '+mmss(r.limit)+'<br>はやさ <b class="spd">'+r.starsText+'</b>　'+esc(spdMsg)+'</p>'
       : '<p class="chtime">⏱ タイム '+mmss(time)+'</p>';
     var pr=prev?rankOf(level,Number(prev.score)||0,Number(prev.time)||0):null;
     el.innerHTML=

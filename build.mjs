@@ -346,7 +346,7 @@ function challengeTopMarkup() {
   <h2 class="cath">${c.count}問チャレンジ</h2>
   <p class="chlead">${c.count}問とくと、きみの<b>級</b>が決まる！</p>
   <p class="ladder">${ranks.map((r) => `<span>${r.emoji}${esc(r.name)}</span>`).join('<i>→</i>')}</p>
-  <p class="hint" style="margin-bottom:10px">${LV[1]}で${c.count}点なら ${top(1).emoji}${esc(top(1).name)}。${LV[3]}で${c.count}点なら…${top(3).emoji}<b>${esc(top(3).name)}</b>！ タイムがおそいとランクが1つ下がるよ（もくひょう ${LV[1]} ${mmss(c.timeLimit[1])}・${LV[2]} ${mmss(c.timeLimit[2])}・${LV[3]} ${mmss(c.timeLimit[3])}）。◎=1点、○=0.5点で${c.count}点まんてん。${config.FEEDBACK_ENDPOINT ? 'ベストきろくを<a href="#ranking">ランキング</a>にとうろくして、チームのトップをねらえ！' : ''}</p>
+  <p class="hint" style="margin-bottom:10px">${LV[1]}で${c.count}点なら ${top(1).emoji}${esc(top(1).name)}。${LV[3]}で${c.count}点なら…${top(3).emoji}<b>${esc(top(3).name)}</b>！ ランクは点で決まるよ。タイムは「はやさ ★」で出るよ（もくひょうタイム内なら ★★★。もくひょう ${LV[1]} ${mmss(c.timeLimit[1])}・${LV[2]} ${mmss(c.timeLimit[2])}・${LV[3]} ${mmss(c.timeLimit[3])}）。◎=1点、○=0.5点で${c.count}点まんてん。${config.FEEDBACK_ENDPOINT ? 'ベストきろくを<a href="#ranking">ランキング</a>にとうろくして、チームのトップをねらえ！' : ''}</p>
   <div class="chbtns">
     ${challengeButtons()}
   </div>
