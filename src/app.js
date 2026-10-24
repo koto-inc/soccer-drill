@@ -53,6 +53,7 @@
   // 👍 のすぐあとに「つぎの問題」でページを移っても送信が消えないよう、sendBeacon（だめなら keepalive 付き fetch）を使う
   function post(payload){
     if(!CFG.feedback) return;
+    if(CFG.fkey) payload.key=CFG.fkey;
     var body=JSON.stringify(payload);
     try{ if(navigator.sendBeacon&&navigator.sendBeacon(CFG.feedback,new Blob([body],{type:'text/plain'}))) return; }catch(e){}
     try{ fetch(CFG.feedback,{method:'POST',mode:'no-cors',keepalive:true,headers:{'Content-Type':'text/plain'},body:body}).catch(function(){}); }catch(e){}
@@ -112,7 +113,7 @@
   function mergeRemoteBest(root){
     if(!NAME||!CFG.feedback||!window.fetch) return;
     try{
-      fetch(CFG.feedback+(CFG.feedback.indexOf('?')>=0?'&':'?')+'name='+encodeURIComponent(NAME))
+      fetch(CFG.feedback+(CFG.feedback.indexOf('?')>=0?'&':'?')+'name='+encodeURIComponent(NAME)+(CFG.fkey?'&key='+encodeURIComponent(CFG.fkey):''))
         .then(function(r){ return r.json(); })
         .then(function(remote){
           if(!remote||typeof remote!=='object') return;
@@ -147,7 +148,7 @@
     var cached=lsGet('pd-ranking',null);
     if(cached&&cached.data) render(cached.data);
     try{
-      fetch(CFG.feedback+(CFG.feedback.indexOf('?')>=0?'&':'?')+'ranking=1')
+      fetch(CFG.feedback+(CFG.feedback.indexOf('?')>=0?'&':'?')+'ranking=1'+(CFG.fkey?'&key='+encodeURIComponent(CFG.fkey):''))
         .then(function(r){ return r.json(); })
         .then(function(data){ if(data&&typeof data==='object'){ lsSet('pd-ranking',{ts:Date.now(),data:data}); render(data); } })
         .catch(function(){ if(!(cached&&cached.data)) lists.forEach(function(ol){ ol.innerHTML='<li class="hint">ランキングをよみこめなかった。あとでもう一度見てね。</li>'; }); });
@@ -285,7 +286,7 @@
       all[id]={type:'feedback',name:NAME,qid:Number(id),vote:vote,comment:(input.value||'').trim().slice(0,100),
         reasons:vote==='bad'?pickedReasons():[],
         level:Number(root.getAttribute('data-level')),phase:root.getAttribute('data-phase'),pos:root.getAttribute('data-pos'),
-        ua:navigator.userAgent,ts:new Date().toISOString()};
+        ts:new Date().toISOString()};
       lsSet(nk('fb'),all);   // 1問につき1件（送り直しは上書き）
       schedule();
     }

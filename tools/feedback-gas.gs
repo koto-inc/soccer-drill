@@ -37,6 +37,9 @@
  *   （60秒キャッシュ。とうろくがあったときはキャッシュを消す）。
  */
 // 保存先のスプレッドシート（URL の /d/ と /edit の間の ID）。空ならこのスクリプトが貼られているシートに保存する
+// サイトとの共通キー（site.config.mjs の FEEDBACK_KEY と同じ文字列）。空なら照合しない。違うキーの送信・取得は受け付けない
+var API_KEY = 'uiJU7xMjpPRvn2oYnakg';
+
 var SPREADSHEET_ID = '1UuAX2vNxlX5qw1t5MUyPKB52Tl9fp59Z5gY7KJXVsN0';
 
 var SHEETS = {
@@ -71,10 +74,15 @@ function getSheet_(type) {
   return sh;
 }
 function joinList_(v, max) { return (Array.isArray(v) ? v.map(String) : [String(v || '')]).filter(Boolean).join(',').slice(0, max || 200); }
+function row_(a) { return a.map(function (v) { return typeof v === 'string' ? cell_(v) : v; }); }
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
-function cleanName_(s) { return String(s || '').replace(/\s+/g, ' ').trim().slice(0, 12); }
+// セルに書く文字列の先頭が = + - @ だと Google スプレッドシートが数式として実行してしまう（数式インジェクション）。先頭に空白を足して文字のままにする
+function cell_(s) { s = String(s == null ? '' : s); return /^[=+\-@]/.test(s) ? ' ' + s : s; }
+// サイトから送られた key が API_KEY と同じか（API_KEY が空なら照合しない）
+function keyOk_(k) { return !API_KEY || String(k || '') === API_KEY; }
+function cleanName_(s) { return cell_(String(s || '').replace(/\s+/g, ' ').trim().slice(0, 12)); }
 function scoreOfMarks_(marks) { var s = 0; for (var i = 0; i < marks.length; i++) { if (marks[i] === '◎') s += 1; else if (marks[i] === '○') s += 0.5; } return s; }
 // 問題数を変える前の記録を、今の問題数に合わせる。marks（◎○×の列）があれば最初の CHALLENGE_COUNT 問で計算し直し、
 // 無ければ点とタイムを問題数の比で縮める（点は 0.5 きざみに切り捨て）
@@ -107,31 +115,32 @@ function doPost(e) {
   try {
     var body = (e && e.postData && e.postData.contents) || '{}';
     var d = JSON.parse(body);
+    if (!keyOk_(d.key)) return json_({ ok: false, error: 'forbidden' });
     var type = d.type === 'result' ? 'result' : d.type === 'answer' ? 'answer' : d.type === 'rank' ? 'rank' : 'feedback';
     var sh = getSheet_(type);
     if (type === 'rank') {
-      sh.appendRow([
+      sh.appendRow(row_([
         new Date(), d.ts || '', cleanName_(d.name), Number(d.level) || '', Number(d.score) || 0, Number(d.timeSec) || 0,
         String(d.rank || '').slice(0, 30), Number(d.rankIdx) || 0
-      ]);
+      ]));
       CacheService.getScriptCache().remove('ranking');   // すぐランキングに出るように
     } else if (type === 'answer') {
-      sh.appendRow([
+      sh.appendRow(row_([
         new Date(), d.ts || '', cleanName_(d.name), Number(d.qid) || '', Number(d.level) || '', String(d.phase || '').slice(0, 30), String(d.pos || '').slice(0, 30),
         joinList_(d.picked, 20), joinList_(d.correct, 20), String(d.result || '').slice(0, 10), Number(d.timeSec) || 0, Number(d.attempt) || 0,
         String(d.mode || '').slice(0, 10)
-      ]);
+      ]));
     } else if (type === 'result') {
-      sh.appendRow([
+      sh.appendRow(row_([
         new Date(), d.ts || '', cleanName_(d.name), Number(d.level) || '', Number(d.score) || 0, Number(d.timeSec) || 0,
         String(d.rank || '').slice(0, 30), Number(d.rankIdx) || 0, d.cleared ? true : false,
         Array.isArray(d.qids) ? d.qids.join(',') : String(d.qids || ''), String(d.marks || '').slice(0, 20)
-      ]);
+      ]));
     } else {
-      sh.appendRow([
+      sh.appendRow(row_([
         new Date(), d.ts || '', cleanName_(d.name), d.qid || '', d.vote || '', String(d.comment || '').slice(0, 200),
-        d.level || '', d.phase || '', d.pos || '', String(d.ua || '').slice(0, 300), joinList_(d.reasons, 200)
-      ]);
+        d.level || '', d.phase || '', d.pos || '', '' /* 端末の種類（ua）は送らなくなった。列は残す */, joinList_(d.reasons, 200)
+      ]));
     }
     return json_({ ok: true });
   } catch (err) {
@@ -146,6 +155,7 @@ function doPost(e) {
 // ?name=...   → その名前のレベル別ベスト（端末をまたいで最高記録を出すため）
 function doGet(e) {
   var p = (e && e.parameter) || {};
+  if (!keyOk_(p.key)) return json_({ ok: false, error: 'forbidden' });
   if (p.ranking) return json_(ranking_());
   var name = cleanName_(p.name);
   if (!name) return json_({});

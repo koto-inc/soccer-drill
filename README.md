@@ -142,6 +142,7 @@ positioning-drill/
 | `NOINDEX` | `true` なら全ページに `noindex,nofollow` を付け、robots.txt を `Disallow: /` にする（検索に載らない）。一般公開するときは `false` にする |
 | `HIDE_INFO_PAGES` | `true` なら「コーチについて」「プライバシーポリシー」「お問い合わせ」の 3 ページを作らず、フッターのリンクも出さない（チーム内公開のあいだ用）。一般公開・AdSense 審査のときは `false` にする |
 | `FEEDBACK_ENDPOINT` | 👍👎・チャレンジ結果・1問ごとの答えログの送り先と、端末をまたいだベスト記録の取得先（下記）。空なら端末の localStorage だけで動く |
+| `FEEDBACK_KEY` | 受け口との共通キー。送信・取得のたびに付け、`tools/feedback-gas.gs` の `API_KEY` と同じ文字列にする（違うと受け口が `forbidden` を返す）。受け口は先頭が `= + - @` の文字列に空白を足して書くので、数式として実行されない |
 | `RANKS` | レベル別チャレンジのランク（点数の下限・絵文字・名前・一言）。並びは点数の低い順 |
 
 今は `TEAM_PASSCODE: 'JJC'`、`NOINDEX: true`、`HIDE_INFO_PAGES: true` になっている。**一般公開するときは 3 つとも外すこと。**

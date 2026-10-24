@@ -43,6 +43,8 @@ export default {
   // 👍👎・チャレンジ結果・答えログの送り先と、なまえごとのベスト記録の取得先（Google Apps Script のウェブアプリURL）。空なら端末の localStorage だけで動く。
   // 受け口の作り方は README と tools/feedback-gas.gs を参照。
   FEEDBACK_ENDPOINT: 'https://script.google.com/macros/s/AKfycbyYlHka9-uUrDGyPQtaQqmG60ZChFy-gy5Wj4a6VZfmoYEuVM_ZxGW18m58dvZDjjU3/exec',
+  // 受け口との共通キー。ページから送る内容に付け、tools/feedback-gas.gs の API_KEY と同じ文字列にする（違うと受け口が受け取らない）。
+  FEEDBACK_KEY: 'uiJU7xMjpPRvn2oYnakg',
 
   // ===== レベル別チャレンジ（CHALLENGE.count 問） =====
   // ランクのはしご（下から順）。絵文字は Windows の PC だと国旗（🇯🇵 など）が文字で出てしまうので、国旗以外を使う。

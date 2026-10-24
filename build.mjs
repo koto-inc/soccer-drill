@@ -275,7 +275,7 @@ function adSlot(name, note) {
 function clientConfig() {
   const levels = {};
   for (const l of [1, 2, 3]) levels[l] = QUESTIONS.filter((q) => q.level === l).map((q) => q.id);
-  return { base: BASE, total: QUESTIONS.length, passcode: config.TEAM_PASSCODE ? normalizePass(config.TEAM_PASSCODE) : '', feedback: config.FEEDBACK_ENDPOINT || '',
+  return { base: BASE, total: QUESTIONS.length, passcode: config.TEAM_PASSCODE ? normalizePass(config.TEAM_PASSCODE) : '', feedback: config.FEEDBACK_ENDPOINT || '', fkey: config.FEEDBACK_KEY || '',
     ranks: config.RANKS, challenge: config.CHALLENGE, levels, levelNames: LV };
 }
 // 合言葉の正規化（全角→半角、小文字、空白除去）。app.js の normalizePass と同じにしておく
